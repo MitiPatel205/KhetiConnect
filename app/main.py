@@ -4,6 +4,7 @@ from app.core.config import API_V1_PREFIX, APP_NAME
 from app.db.database import Base, engine
 from app.models import Farm
 from app.routers import tasks, crops, dashboard, farms, fields, inventory,maintenance,equipment
+from fastapi.middleware.cors import CORSMiddleware
 
 Base.metadata.create_all(bind=engine)
 
@@ -12,7 +13,13 @@ app = FastAPI(
     description="Farm operations management API for KhetiConnect",
     version="1.0.0"
 )
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(farms.router, prefix=API_V1_PREFIX)
 app.include_router(fields.router, prefix=API_V1_PREFIX)
 app.include_router(crops.router, prefix=API_V1_PREFIX)
