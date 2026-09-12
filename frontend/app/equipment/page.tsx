@@ -632,6 +632,12 @@ export default function EquipmentPage() {
                         {item.notes}
                       </p>
                     ) : null}
+                    <Link
+  className="mt-4 inline-flex text-sm font-semibold text-emerald-700 transition hover:text-emerald-900"
+  href={`/maintenance?equipment_id=${item.id}`}
+>
+  View maintenance history →
+</Link>
                   </article>
                 );
               })}
