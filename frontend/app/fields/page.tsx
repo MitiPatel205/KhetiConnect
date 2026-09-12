@@ -11,29 +11,103 @@ type Farm = {
 
 type Field = {
   id: number;
-  name: string;
   farm_id: number;
-  area_acres: number | null;
+  name: string;
+  area_acres?: number | null;
+  size_acres?: number | null;
   soil_type: string | null;
+  status?: string | null;
   notes: string | null;
 };
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
+const FIELD_STATUSES = ["Active", "Inactive", "Fallow"] as const;
+
+function getFieldSize(field: Field) {
+  return field.size_acres ?? field.area_acres ?? null;
+}
+
+function formatAcreage(sizeAcres: number | null) {
+  if (sizeAcres === null) {
+    return "Area not set";
+  }
+
+  return `${sizeAcres} ${sizeAcres === 1 ? "acre" : "acres"}`;
+}
+
+function statusClass(status: string | null | undefined) {
+  switch (status?.toLowerCase()) {
+    case "active":
+      return "bg-emerald-100 text-emerald-800";
+    case "fallow":
+      return "bg-amber-100 text-amber-800";
+    case "inactive":
+      return "bg-slate-100 text-slate-700";
+    default:
+      return "bg-sky-100 text-sky-800";
+  }
+}
+
 export default function FieldsPage() {
   const [farms, setFarms] = useState<Farm[]>([]);
   const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
   const [fields, setFields] = useState<Field[]>([]);
+
   const [name, setName] = useState("");
-  const [areaAcres, setAreaAcres] = useState("");
+  const [sizeAcres, setSizeAcres] = useState("");
   const [soilType, setSoilType] = useState("");
+  const [status, setStatus] = useState("Active");
   const [notes, setNotes] = useState("");
+
+  const [editingFieldId, setEditingFieldId] = useState<number | null>(null);
   const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingFields, setLoadingFields] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingFieldId, setDeletingFieldId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function resetForm() {
+    setName("");
+    setSizeAcres("");
+    setSoilType("");
+    setStatus("Active");
+    setNotes("");
+    setEditingFieldId(null);
+  }
+
+  function closeForm() {
+    resetForm();
+    setShowForm(false);
+  }
+
+  async function loadFields(farmId: number) {
+    setLoadingFields(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/v1/fields?farm_id=${farmId}`,
+      );
+
+      if (!response.ok) {
+        throw new Error(`Field request failed with status ${response.status}`);
+      }
+
+      const data: Field[] = await response.json();
+      setFields(data);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load fields.",
+      );
+    } finally {
+      setLoadingFields(false);
+    }
+  }
 
   useEffect(() => {
     async function loadFarms() {
@@ -50,7 +124,10 @@ export default function FieldsPage() {
         const savedFarmId = window.localStorage.getItem("selectedFarmId");
         const parsedFarmId = savedFarmId ? Number(savedFarmId) : null;
 
-        if (parsedFarmId && data.some((farm) => farm.id === parsedFarmId)) {
+        if (
+          parsedFarmId !== null &&
+          data.some((farm) => farm.id === parsedFarmId)
+        ) {
           setSelectedFarmId(parsedFarmId);
         } else if (data.length > 0) {
           setSelectedFarmId(data[0].id);
@@ -76,105 +153,165 @@ export default function FieldsPage() {
     }
 
     window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
-
-    async function loadFields() {
-      setLoadingFields(true);
-      setError(null);
-
-      try {
-        const response = await fetch(
-          `${API_URL}/api/v1/fields?farm_id=${selectedFarmId}`,
-        );
-
-        if (!response.ok) {
-          throw new Error(`Field request failed with status ${response.status}`);
-        }
-
-        const data: Field[] = await response.json();
-        setFields(data);
-      } catch (requestError) {
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load fields.",
-        );
-      } finally {
-        setLoadingFields(false);
-      }
-    }
-
-    loadFields();
+    closeForm();
+    loadFields(selectedFarmId);
   }, [selectedFarmId]);
 
   function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
     setSelectedFarmId(Number(event.target.value));
-    setShowForm(false);
+  }
+
+  function openCreateForm() {
+    resetForm();
+    setError(null);
+    setShowForm(true);
+  }
+
+  function openEditForm(field: Field) {
+    setError(null);
+    setEditingFieldId(field.id);
+    setName(field.name);
+    setSizeAcres(
+      getFieldSize(field) === null ? "" : String(getFieldSize(field)),
+    );
+    setSoilType(field.soil_type ?? "");
+    setStatus(field.status ?? "Active");
+    setNotes(field.notes ?? "");
+    setShowForm(true);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (selectedFarmId === null) {
-      setError("Select a farm before creating a field.");
+      setError("Select a farm before saving a field.");
       return;
     }
 
     const trimmedName = name.trim();
+    const parsedSizeAcres = sizeAcres.trim() ? Number(sizeAcres) : null;
 
     if (!trimmedName) {
       setError("Field name is required.");
       return;
     }
 
-    const parsedArea = areaAcres.trim() ? Number(areaAcres) : null;
-
-    if (parsedArea !== null && (!Number.isFinite(parsedArea) || parsedArea <= 0)) {
+    if (
+      parsedSizeAcres !== null &&
+      (!Number.isFinite(parsedSizeAcres) || parsedSizeAcres <= 0)
+    ) {
       setError("Area must be a number greater than zero.");
       return;
     }
+
+    const isEditing = editingFieldId !== null;
+
+    const createPayload = {
+      farm_id: selectedFarmId,
+      name: trimmedName,
+      area_acres: parsedSizeAcres,
+      soil_type: soilType.trim() || null,
+      notes: notes.trim() || null,
+    };
+
+    const updatePayload = {
+      name: trimmedName,
+      size_acres: parsedSizeAcres,
+      soil_type: soilType.trim() || null,
+      status,
+      notes: notes.trim() || null,
+    };
+
+    const endpoint = isEditing
+      ? `${API_URL}/api/v1/fields/${editingFieldId}`
+      : `${API_URL}/api/v1/fields`;
 
     setSaving(true);
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/fields`, {
-        method: "POST",
+      const response = await fetch(endpoint, {
+        method: isEditing ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          farm_id: selectedFarmId,
-          name: trimmedName,
-          area_acres: parsedArea,
-          soil_type: soilType.trim() || null,
-          notes: notes.trim() || null,
-        }),
+        body: JSON.stringify(isEditing ? updatePayload : createPayload),
       });
 
       if (!response.ok) {
         const responseBody = await response.text();
         throw new Error(
           responseBody ||
-            `Could not create field. Server returned ${response.status}.`,
+            `Could not ${isEditing ? "update" : "create"} field. Server returned ${response.status}.`,
         );
       }
 
-      const newField: Field = await response.json();
+      const savedField: Field = await response.json();
 
-      setFields((currentFields) => [...currentFields, newField]);
-      setName("");
-      setAreaAcres("");
-      setSoilType("");
-      setNotes("");
-      setShowForm(false);
+      if (isEditing) {
+        setFields((currentFields) =>
+          currentFields.map((field) =>
+            field.id === savedField.id ? savedField : field,
+          ),
+        );
+      } else {
+        setFields((currentFields) => [...currentFields, savedField]);
+      }
+
+      closeForm();
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to create the field.",
+          : `Unable to ${isEditing ? "update" : "create"} field.`,
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete(field: Field) {
+    const shouldDelete = window.confirm(
+      `Delete "${field.name}"? Any crops associated with this field may also be removed. This action cannot be undone.`,
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingFieldId(field.id);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/fields/${field.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const responseBody = await response.text();
+        throw new Error(
+          responseBody ||
+            `Could not delete field. Server returned ${response.status}.`,
+        );
+      }
+
+      setFields((currentFields) =>
+        currentFields.filter((currentField) => currentField.id !== field.id),
+      );
+
+      if (editingFieldId === field.id) {
+        closeForm();
+      }
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to delete field.",
+      );
+    } finally {
+      setDeletingFieldId(null);
     }
   }
 
@@ -216,8 +353,8 @@ export default function FieldsPage() {
               Fields
             </h1>
             <p className="mt-2 max-w-2xl text-slate-600">
-              Define the growing areas within each farm, including acreage,
-              soil, and important field notes.
+              Define and maintain growing areas, including acreage, soil type,
+              field status, and operational notes.
             </p>
           </div>
 
@@ -225,8 +362,11 @@ export default function FieldsPage() {
             className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={selectedFarmId === null}
             onClick={() => {
-              setError(null);
-              setShowForm((visible) => !visible);
+              if (showForm) {
+                closeForm();
+              } else {
+                openCreateForm();
+              }
             }}
             type="button"
           >
@@ -277,9 +417,13 @@ export default function FieldsPage() {
 
         {showForm ? (
           <section className="mt-6 rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-900">Create a field</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              {editingFieldId === null ? "Create a field" : "Edit field"}
+            </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Add an area of land to {selectedFarm?.name ?? "the selected farm"}.
+              {editingFieldId === null
+                ? `Add a growing area to ${selectedFarm?.name ?? "the selected farm"}.`
+                : "Update field details and operational status."}
             </p>
 
             <form
@@ -306,11 +450,11 @@ export default function FieldsPage() {
                   disabled={saving}
                   inputMode="decimal"
                   min="0.01"
-                  onChange={(event) => setAreaAcres(event.target.value)}
+                  onChange={(event) => setSizeAcres(event.target.value)}
                   placeholder="e.g., 2.5"
                   step="0.01"
                   type="number"
-                  value={areaAcres}
+                  value={sizeAcres}
                 />
               </label>
 
@@ -326,6 +470,22 @@ export default function FieldsPage() {
               </label>
 
               <label className="text-sm font-medium text-slate-700">
+                Status
+                <select
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  disabled={saving}
+                  onChange={(event) => setStatus(event.target.value)}
+                  value={status}
+                >
+                  {FIELD_STATUSES.map((fieldStatus) => (
+                    <option key={fieldStatus} value={fieldStatus}>
+                      {fieldStatus}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm font-medium text-slate-700 sm:col-span-2">
                 Notes
                 <input
                   className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
@@ -342,12 +502,19 @@ export default function FieldsPage() {
                   disabled={saving}
                   type="submit"
                 >
-                  {saving ? "Creating field…" : "Create field"}
+                  {saving
+                    ? editingFieldId === null
+                      ? "Creating field…"
+                      : "Saving changes…"
+                    : editingFieldId === null
+                      ? "Create field"
+                      : "Save changes"}
                 </button>
+
                 <button
                   className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                   disabled={saving}
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
                   type="button"
                 >
                   Cancel
@@ -398,7 +565,7 @@ export default function FieldsPage() {
               </p>
               <button
                 className="mt-5 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                onClick={() => setShowForm(true)}
+                onClick={openCreateForm}
                 type="button"
               >
                 Create your first field
@@ -411,16 +578,22 @@ export default function FieldsPage() {
                   className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
                   key={field.id}
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-lime-50 text-xl">
-                    🌾
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-lime-50 text-xl">
+                      🌾
+                    </div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-bold ${statusClass(field.status)}`}
+                    >
+                      {field.status ?? "Not set"}
+                    </span>
                   </div>
+
                   <h3 className="mt-4 text-lg font-bold text-slate-900">
                     {field.name}
                   </h3>
                   <p className="mt-1 text-sm text-slate-600">
-                    {field.area_acres
-                      ? `${field.area_acres} acres`
-                      : "Area not set"}
+                    {formatAcreage(getFieldSize(field))}
                   </p>
 
                   <dl className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-sm">
@@ -430,13 +603,33 @@ export default function FieldsPage() {
                         {field.soil_type ?? "Not set"}
                       </dd>
                     </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-slate-500">Notes</dt>
-                      <dd className="max-w-40 text-right font-medium text-slate-700">
-                        {field.notes ?? "None"}
-                      </dd>
-                    </div>
                   </dl>
+
+                  {field.notes ? (
+                    <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                      {field.notes}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-5 flex gap-3 border-t border-slate-100 pt-4">
+                    <button
+                      className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-900 disabled:opacity-50"
+                      disabled={deletingFieldId === field.id}
+                      onClick={() => openEditForm(field)}
+                      type="button"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      className="text-sm font-semibold text-red-700 transition hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={deletingFieldId === field.id}
+                      onClick={() => handleDelete(field)}
+                      type="button"
+                    >
+                      {deletingFieldId === field.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
