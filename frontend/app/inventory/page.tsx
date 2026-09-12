@@ -58,12 +58,31 @@ export default function InventoryPage() {
   const [expiryDate, setExpiryDate] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingItemId, setDeletingItemId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function resetForm() {
+    setName("");
+    setCategory("Seeds");
+    setQuantity("");
+    setUnit("");
+    setReorderLevel("");
+    setSupplier("");
+    setExpiryDate("");
+    setNotes("");
+    setEditingItemId(null);
+  }
+
+  function closeForm() {
+    resetForm();
+    setShowForm(false);
+  }
 
   async function loadItems(farmId: number) {
     setLoadingItems(true);
@@ -137,7 +156,7 @@ export default function InventoryPage() {
     }
 
     window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
-    setShowForm(false);
+    closeForm();
     loadItems(selectedFarmId);
   }, [selectedFarmId]);
 
@@ -145,11 +164,33 @@ export default function InventoryPage() {
     setSelectedFarmId(Number(event.target.value));
   }
 
+  function openCreateForm() {
+    resetForm();
+    setError(null);
+    setShowForm(true);
+  }
+
+  function openEditForm(item: InventoryItem) {
+    setError(null);
+    setEditingItemId(item.id);
+    setName(item.name);
+    setCategory(item.category);
+    setQuantity(String(item.quantity));
+    setUnit(item.unit);
+    setReorderLevel(String(item.reorder_level));
+    setSupplier(item.supplier ?? "");
+    setExpiryDate(item.expiry_date ?? "");
+    setNotes(item.notes ?? "");
+    setShowForm(true);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (selectedFarmId === null) {
-      setError("Select a farm before creating an inventory item.");
+      setError("Select a farm before saving an inventory item.");
       return;
     }
 
@@ -181,56 +222,107 @@ export default function InventoryPage() {
       return;
     }
 
+    const payload = {
+      farm_id: selectedFarmId,
+      name: name.trim(),
+      category: category.trim(),
+      quantity: parsedQuantity,
+      unit: unit.trim(),
+      reorder_level: parsedReorderLevel,
+      supplier: supplier.trim() || null,
+      expiry_date: expiryDate || null,
+      notes: notes.trim() || null,
+    };
+
+    const isEditing = editingItemId !== null;
+    const endpoint = isEditing
+      ? `${API_URL}/api/v1/inventory/${editingItemId}`
+      : `${API_URL}/api/v1/inventory`;
+
     setSaving(true);
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/inventory`, {
-        method: "POST",
+      const response = await fetch(endpoint, {
+        method: isEditing ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          farm_id: selectedFarmId,
-          name: name.trim(),
-          category: category.trim(),
-          quantity: parsedQuantity,
-          unit: unit.trim(),
-          reorder_level: parsedReorderLevel,
-          supplier: supplier.trim() || null,
-          expiry_date: expiryDate || null,
-          notes: notes.trim() || null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const responseBody = await response.text();
         throw new Error(
           responseBody ||
-            `Could not create item. Server returned ${response.status}.`,
+            `Could not ${isEditing ? "update" : "create"} item. Server returned ${response.status}.`,
         );
       }
 
-      const newItem: InventoryItem = await response.json();
+      const savedItem: InventoryItem = await response.json();
 
-      setItems((currentItems) => [...currentItems, newItem]);
-      setName("");
-      setCategory("Seeds");
-      setQuantity("");
-      setUnit("");
-      setReorderLevel("");
-      setSupplier("");
-      setExpiryDate("");
-      setNotes("");
-      setShowForm(false);
+      if (isEditing) {
+        setItems((currentItems) =>
+          currentItems.map((item) =>
+            item.id === savedItem.id ? savedItem : item,
+          ),
+        );
+      } else {
+        setItems((currentItems) => [...currentItems, savedItem]);
+      }
+
+      closeForm();
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to create inventory item.",
+          : `Unable to ${isEditing ? "update" : "create"} inventory item.`,
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete(item: InventoryItem) {
+    const shouldDelete = window.confirm(
+      `Delete "${item.name}"? This action cannot be undone.`,
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingItemId(item.id);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/inventory/${item.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const responseBody = await response.text();
+        throw new Error(
+          responseBody ||
+            `Could not delete item. Server returned ${response.status}.`,
+        );
+      }
+
+      setItems((currentItems) =>
+        currentItems.filter((currentItem) => currentItem.id !== item.id),
+      );
+
+      if (editingItemId === item.id) {
+        closeForm();
+      }
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to delete inventory item.",
+      );
+    } finally {
+      setDeletingItemId(null);
     }
   }
 
@@ -288,8 +380,11 @@ export default function InventoryPage() {
             className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={selectedFarmId === null}
             onClick={() => {
-              setError(null);
-              setShowForm((visible) => !visible);
+              if (showForm) {
+                closeForm();
+              } else {
+                openCreateForm();
+              }
             }}
             type="button"
           >
@@ -353,10 +448,14 @@ export default function InventoryPage() {
         {showForm ? (
           <section className="mt-6 rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-bold text-slate-900">
-              Create an inventory item
+              {editingItemId === null
+                ? "Create an inventory item"
+                : "Edit inventory item"}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Add a supply record for {selectedFarm?.name ?? "the selected farm"}.
+              {editingItemId === null
+                ? `Add a supply record for ${selectedFarm?.name ?? "the selected farm"}.`
+                : "Update stock levels, reorder thresholds, or supply details."}
             </p>
 
             <form
@@ -469,12 +568,19 @@ export default function InventoryPage() {
                   disabled={saving}
                   type="submit"
                 >
-                  {saving ? "Creating item…" : "Create item"}
+                  {saving
+                    ? editingItemId === null
+                      ? "Creating item…"
+                      : "Saving changes…"
+                    : editingItemId === null
+                      ? "Create item"
+                      : "Save changes"}
                 </button>
+
                 <button
                   className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                   disabled={saving}
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
                   type="button"
                 >
                   Cancel
@@ -541,7 +647,7 @@ export default function InventoryPage() {
               {!lowStockOnly ? (
                 <button
                   className="mt-5 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                  onClick={() => setShowForm(true)}
+                  onClick={openCreateForm}
                   type="button"
                 >
                   Create your first item
@@ -563,6 +669,7 @@ export default function InventoryPage() {
                     <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-xl">
                       📦
                     </div>
+
                     {item.is_low_stock ? (
                       <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
                         Low stock
@@ -608,6 +715,26 @@ export default function InventoryPage() {
                       {item.notes}
                     </p>
                   ) : null}
+
+                  <div className="mt-5 flex gap-3 border-t border-slate-100 pt-4">
+                    <button
+                      className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-900"
+                      disabled={deletingItemId === item.id}
+                      onClick={() => openEditForm(item)}
+                      type="button"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      className="text-sm font-semibold text-red-700 transition hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={deletingItemId === item.id}
+                      onClick={() => handleDelete(item)}
+                      type="button"
+                    >
+                      {deletingItemId === item.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
