@@ -17,16 +17,33 @@ type Field = {
 
 type Crop = {
   id: number;
-  name: string;
   field_id: number;
+  name: string;
+  variety: string | null;
   planting_date: string | null;
   expected_harvest_date: string | null;
+  growth_stage: string | null;
   status: string;
   notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
+const CROP_STATUSES = ["Planned", "Growing", "Harvested", "Inactive"] as const;
+
+const GROWTH_STAGES = [
+  "Planned",
+  "Germination",
+  "Seedling",
+  "Vegetative",
+  "Flowering",
+  "Fruiting",
+  "Harvest Ready",
+  "Harvested",
+] as const;
 
 function formatDate(value: string | null) {
   if (!value) {
@@ -42,7 +59,7 @@ function formatDate(value: string | null) {
 
 function statusClass(status: string) {
   switch (status.toLowerCase()) {
-    case "active":
+    case "growing":
       return "bg-emerald-100 text-emerald-800";
     case "planned":
       return "bg-sky-100 text-sky-800";
@@ -58,17 +75,80 @@ export default function CropsPage() {
   const [fields, setFields] = useState<Field[]>([]);
   const [crops, setCrops] = useState<Crop[]>([]);
   const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
+
   const [fieldId, setFieldId] = useState("");
   const [name, setName] = useState("");
+  const [variety, setVariety] = useState("");
   const [plantingDate, setPlantingDate] = useState("");
   const [harvestDate, setHarvestDate] = useState("");
-  const [status, setStatus] = useState("Active");
+  const [growthStage, setGrowthStage] = useState("Planned");
+  const [status, setStatus] = useState("Growing");
   const [notes, setNotes] = useState("");
+
+  const [editingCropId, setEditingCropId] = useState<number | null>(null);
   const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingCropId, setDeletingCropId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function resetForm() {
+    setFieldId("");
+    setName("");
+    setVariety("");
+    setPlantingDate("");
+    setHarvestDate("");
+    setGrowthStage("Planned");
+    setStatus("Growing");
+    setNotes("");
+    setEditingCropId(null);
+  }
+
+  function closeForm() {
+    resetForm();
+    setShowForm(false);
+  }
+
+  async function loadFarmData(farmId: number) {
+    setLoadingData(true);
+    setError(null);
+
+    try {
+      const [fieldsResponse, cropsResponse] = await Promise.all([
+        fetch(`${API_URL}/api/v1/fields?farm_id=${farmId}`),
+        fetch(`${API_URL}/api/v1/crops?farm_id=${farmId}`),
+      ]);
+
+      if (!fieldsResponse.ok) {
+        throw new Error(
+          `Field request failed with status ${fieldsResponse.status}`,
+        );
+      }
+
+      if (!cropsResponse.ok) {
+        throw new Error(
+          `Crop request failed with status ${cropsResponse.status}`,
+        );
+      }
+
+      const [fieldData, cropData] = await Promise.all([
+        fieldsResponse.json() as Promise<Field[]>,
+        cropsResponse.json() as Promise<Crop[]>,
+      ]);
+
+      setFields(fieldData);
+      setCrops(cropData);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load crops.",
+      );
+    } finally {
+      setLoadingData(false);
+    }
+  }
 
   useEffect(() => {
     async function loadFarms() {
@@ -115,54 +195,34 @@ export default function CropsPage() {
     }
 
     window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
-    setFieldId("");
-    setShowForm(false);
-
-    async function loadFarmData() {
-      setLoadingData(true);
-      setError(null);
-
-      try {
-        const [fieldsResponse, cropsResponse] = await Promise.all([
-          fetch(`${API_URL}/api/v1/fields?farm_id=${selectedFarmId}`),
-          fetch(`${API_URL}/api/v1/crops?farm_id=${selectedFarmId}`),
-        ]);
-
-        if (!fieldsResponse.ok) {
-          throw new Error(
-            `Field request failed with status ${fieldsResponse.status}`,
-          );
-        }
-
-        if (!cropsResponse.ok) {
-          throw new Error(
-            `Crop request failed with status ${cropsResponse.status}`,
-          );
-        }
-
-        const [fieldData, cropData] = await Promise.all([
-          fieldsResponse.json() as Promise<Field[]>,
-          cropsResponse.json() as Promise<Crop[]>,
-        ]);
-
-        setFields(fieldData);
-        setCrops(cropData);
-      } catch (requestError) {
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load crops.",
-        );
-      } finally {
-        setLoadingData(false);
-      }
-    }
-
-    loadFarmData();
+    closeForm();
+    loadFarmData(selectedFarmId);
   }, [selectedFarmId]);
 
   function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
     setSelectedFarmId(Number(event.target.value));
+  }
+
+  function openCreateForm() {
+    resetForm();
+    setError(null);
+    setShowForm(true);
+  }
+
+  function openEditForm(crop: Crop) {
+    setError(null);
+    setEditingCropId(crop.id);
+    setFieldId(String(crop.field_id));
+    setName(crop.name);
+    setVariety(crop.variety ?? "");
+    setPlantingDate(crop.planting_date ?? "");
+    setHarvestDate(crop.expected_harvest_date ?? "");
+    setGrowthStage(crop.growth_stage ?? "Planned");
+    setStatus(crop.status);
+    setNotes(crop.notes ?? "");
+    setShowForm(true);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -170,62 +230,127 @@ export default function CropsPage() {
 
     const trimmedName = name.trim();
     const parsedFieldId = Number(fieldId);
+    const isEditing = editingCropId !== null;
 
     if (!trimmedName) {
       setError("Crop name is required.");
       return;
     }
 
-    if (!Number.isInteger(parsedFieldId) || parsedFieldId <= 0) {
+    if (!isEditing && (!Number.isInteger(parsedFieldId) || parsedFieldId <= 0)) {
       setError("Select a field before creating a crop.");
       return;
     }
+
+    const createPayload = {
+      field_id: parsedFieldId,
+      name: trimmedName,
+      variety: variety.trim() || null,
+      planting_date: plantingDate || null,
+      expected_harvest_date: harvestDate || null,
+      growth_stage: growthStage || null,
+      status,
+      notes: notes.trim() || null,
+    };
+
+    const updatePayload = {
+      name: trimmedName,
+      variety: variety.trim() || null,
+      planting_date: plantingDate || null,
+      expected_harvest_date: harvestDate || null,
+      growth_stage: growthStage || null,
+      status,
+      notes: notes.trim() || null,
+    };
+
+    const endpoint = isEditing
+      ? `${API_URL}/api/v1/crops/${editingCropId}`
+      : `${API_URL}/api/v1/crops`;
 
     setSaving(true);
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/crops`, {
-        method: "POST",
+      const response = await fetch(endpoint, {
+        method: isEditing ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          field_id: parsedFieldId,
-          name: trimmedName,
-          planting_date: plantingDate || null,
-          expected_harvest_date: harvestDate || null,
-          status,
-          notes: notes.trim() || null,
-        }),
+        body: JSON.stringify(isEditing ? updatePayload : createPayload),
       });
 
       if (!response.ok) {
         const responseBody = await response.text();
         throw new Error(
           responseBody ||
-            `Could not create crop. Server returned ${response.status}.`,
+            `Could not ${isEditing ? "update" : "create"} crop. Server returned ${response.status}.`,
         );
       }
 
-      const newCrop: Crop = await response.json();
+      const savedCrop: Crop = await response.json();
 
-      setCrops((currentCrops) => [...currentCrops, newCrop]);
-      setFieldId("");
-      setName("");
-      setPlantingDate("");
-      setHarvestDate("");
-      setStatus("Active");
-      setNotes("");
-      setShowForm(false);
+      if (isEditing) {
+        setCrops((currentCrops) =>
+          currentCrops.map((crop) =>
+            crop.id === savedCrop.id ? savedCrop : crop,
+          ),
+        );
+      } else {
+        setCrops((currentCrops) => [...currentCrops, savedCrop]);
+      }
+
+      closeForm();
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to create the crop.",
+          : `Unable to ${isEditing ? "update" : "create"} crop.`,
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete(crop: Crop) {
+    const shouldDelete = window.confirm(
+      `Delete "${crop.name}"? This crop record will be permanently removed.`,
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingCropId(crop.id);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/crops/${crop.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const responseBody = await response.text();
+        throw new Error(
+          responseBody ||
+            `Could not delete crop. Server returned ${response.status}.`,
+        );
+      }
+
+      setCrops((currentCrops) =>
+        currentCrops.filter((currentCrop) => currentCrop.id !== crop.id),
+      );
+
+      if (editingCropId === crop.id) {
+        closeForm();
+      }
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to delete crop.",
+      );
+    } finally {
+      setDeletingCropId(null);
     }
   }
 
@@ -269,8 +394,8 @@ export default function CropsPage() {
               Crops
             </h1>
             <p className="mt-2 max-w-2xl text-slate-600">
-              Track what is growing in each field, from planting through
-              harvest.
+              Track each crop’s variety, growth stage, planting date, and
+              expected harvest.
             </p>
           </div>
 
@@ -278,8 +403,11 @@ export default function CropsPage() {
             className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={selectedFarmId === null || fields.length === 0}
             onClick={() => {
-              setError(null);
-              setShowForm((visible) => !visible);
+              if (showForm) {
+                closeForm();
+              } else {
+                openCreateForm();
+              }
             }}
             type="button"
           >
@@ -346,9 +474,13 @@ export default function CropsPage() {
 
         {showForm ? (
           <section className="mt-6 rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-900">Create a crop</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              {editingCropId === null ? "Create a crop" : "Edit crop"}
+            </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Add a crop to a field on {selectedFarm?.name ?? "the selected farm"}.
+              {editingCropId === null
+                ? `Add a crop to a field on ${selectedFarm?.name ?? "the selected farm"}.`
+                : "Update crop details, stage, status, and anticipated harvest."}
             </p>
 
             <form
@@ -362,17 +494,28 @@ export default function CropsPage() {
                   className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   disabled={saving}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="e.g., Tomatoes"
+                  placeholder="e.g., Tomato"
                   required
                   value={name}
                 />
               </label>
 
               <label className="text-sm font-medium text-slate-700">
+                Variety
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  disabled={saving}
+                  onChange={(event) => setVariety(event.target.value)}
+                  placeholder="e.g., Roma"
+                  value={variety}
+                />
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
                 Field <span className="text-red-600">*</span>
                 <select
-                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                  disabled={saving}
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100"
+                  disabled={saving || editingCropId !== null}
                   onChange={(event) => setFieldId(event.target.value)}
                   required
                   value={fieldId}
@@ -381,6 +524,27 @@ export default function CropsPage() {
                   {fields.map((field) => (
                     <option key={field.id} value={field.id}>
                       {field.name}
+                    </option>
+                  ))}
+                </select>
+                {editingCropId !== null ? (
+                  <span className="mt-1 block text-xs text-slate-500">
+                    Field assignment cannot be changed through the current API.
+                  </span>
+                ) : null}
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
+                Growth stage
+                <select
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  disabled={saving}
+                  onChange={(event) => setGrowthStage(event.target.value)}
+                  value={growthStage}
+                >
+                  {GROWTH_STAGES.map((stage) => (
+                    <option key={stage} value={stage}>
+                      {stage}
                     </option>
                   ))}
                 </select>
@@ -416,10 +580,11 @@ export default function CropsPage() {
                   onChange={(event) => setStatus(event.target.value)}
                   value={status}
                 >
-                  <option value="Planned">Planned</option>
-                  <option value="Active">Active</option>
-                  <option value="Harvested">Harvested</option>
-                  <option value="Inactive">Inactive</option>
+                  {CROP_STATUSES.map((cropStatus) => (
+                    <option key={cropStatus} value={cropStatus}>
+                      {cropStatus}
+                    </option>
+                  ))}
                 </select>
               </label>
 
@@ -429,7 +594,7 @@ export default function CropsPage() {
                   className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   disabled={saving}
                   onChange={(event) => setNotes(event.target.value)}
-                  placeholder="e.g., Cherry tomato variety"
+                  placeholder="e.g., Monitor irrigation twice each week"
                   value={notes}
                 />
               </label>
@@ -440,13 +605,19 @@ export default function CropsPage() {
                   disabled={saving}
                   type="submit"
                 >
-                  {saving ? "Creating crop…" : "Create crop"}
+                  {saving
+                    ? editingCropId === null
+                      ? "Creating crop…"
+                      : "Saving changes…"
+                    : editingCropId === null
+                      ? "Create crop"
+                      : "Save changes"}
                 </button>
 
                 <button
                   className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                   disabled={saving}
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
                   type="button"
                 >
                   Cancel
@@ -497,7 +668,7 @@ export default function CropsPage() {
               </p>
               <button
                 className="mt-5 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                onClick={() => setShowForm(true)}
+                onClick={openCreateForm}
                 type="button"
               >
                 Create your first crop
@@ -523,12 +694,19 @@ export default function CropsPage() {
 
                   <h3 className="mt-4 text-lg font-bold text-slate-900">
                     {crop.name}
+                    {crop.variety ? ` · ${crop.variety}` : ""}
                   </h3>
                   <p className="mt-1 text-sm text-slate-600">
                     {fieldNameById.get(crop.field_id) ?? "Field unavailable"}
                   </p>
 
                   <dl className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-slate-500">Growth stage</dt>
+                      <dd className="text-right font-medium text-slate-700">
+                        {crop.growth_stage ?? "Not set"}
+                      </dd>
+                    </div>
                     <div className="flex justify-between gap-3">
                       <dt className="text-slate-500">Planted</dt>
                       <dd className="text-right font-medium text-slate-700">
@@ -548,6 +726,26 @@ export default function CropsPage() {
                       {crop.notes}
                     </p>
                   ) : null}
+
+                  <div className="mt-5 flex gap-3 border-t border-slate-100 pt-4">
+                    <button
+                      className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-900 disabled:opacity-50"
+                      disabled={deletingCropId === crop.id}
+                      onClick={() => openEditForm(crop)}
+                      type="button"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      className="text-sm font-semibold text-red-700 transition hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={deletingCropId === crop.id}
+                      onClick={() => handleDelete(crop)}
+                      type="button"
+                    >
+                      {deletingCropId === crop.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
