@@ -293,7 +293,7 @@ export default function Home() {
 </a>
             <a
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
-              href="#fields"
+              href="/fields"
             >
               <span>▦</span>
               Fields
