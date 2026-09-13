@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Farm = {
@@ -206,35 +207,39 @@ export default function Home() {
   const upcomingTasks = dashboard?.upcoming_tasks ?? [];
 
   const cards = [
-    {
-      label: "Total Fields",
-      value: summary?.total_fields ?? "—",
-      note: "Fields managed",
-      icon: "▦",
-      color: "bg-emerald-50 text-emerald-700",
-    },
-    {
-      label: "Active Crops",
-      value: summary?.active_crops ?? "—",
-      note: "Currently growing",
-      icon: "✿",
-      color: "bg-lime-50 text-lime-700",
-    },
-    {
-      label: "Open Tasks",
-      value: summary?.open_tasks ?? "—",
-      note: `${summary?.overdue_tasks ?? 0} overdue`,
-      icon: "✓",
-      color: "bg-sky-50 text-sky-700",
-    },
-    {
-      label: "Low Stock",
-      value: summary?.low_stock_items ?? "—",
-      note: "Items need attention",
-      icon: "▣",
-      color: "bg-amber-50 text-amber-700",
-    },
-  ];
+  {
+    label: "Total Fields",
+    value: summary?.total_fields ?? "—",
+    note: "Fields managed",
+    icon: "▦",
+    color: "bg-emerald-50 text-emerald-700",
+    href: "/fields",
+  },
+  {
+    label: "Active Crops",
+    value: summary?.active_crops ?? "—",
+    note: "Currently growing",
+    icon: "✿",
+    color: "bg-lime-50 text-lime-700",
+    href: "/crops",
+  },
+  {
+    label: "Open Tasks",
+    value: summary?.open_tasks ?? "—",
+    note: `${summary?.overdue_tasks ?? 0} overdue`,
+    icon: "✓",
+    color: "bg-sky-50 text-sky-700",
+    href: "/tasks",
+  },
+  {
+    label: "Low Stock",
+    value: summary?.low_stock_items ?? "—",
+    note: "Items need attention",
+    icon: "▣",
+    color: "bg-amber-50 text-amber-700",
+    href: "/inventory",
+  },
+];
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -361,10 +366,11 @@ export default function Home() {
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {cards.map((card) => (
-              <article
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-                key={card.label}
-              >
+              <Link
+  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
+  href={card.href}
+  key={card.label}
+>
                 <div className="flex items-start justify-between">
                   <p className="text-sm font-medium text-slate-500">
                     {card.label}
@@ -379,7 +385,7 @@ export default function Home() {
                   {loadingDashboard ? "…" : card.value}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">{card.note}</p>
-              </article>
+            </Link>
             ))}
           </div>
 
@@ -390,7 +396,12 @@ export default function Home() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-lg font-bold">Upcoming tasks</p>
+                  <Link
+  className="text-lg font-bold transition hover:text-emerald-700"
+  href="/tasks"
+>
+  Upcoming tasks
+</Link>
                   <p className="mt-1 text-sm text-slate-500">
                     Keep your farm work on schedule.
                   </p>
@@ -443,27 +454,36 @@ export default function Home() {
               </h2>
 
               <div className="mt-6 space-y-3">
-                <div className="rounded-xl bg-white/10 p-4">
-                  <p className="text-sm text-emerald-100">Low stock items</p>
-                  <p className="mt-1 text-2xl font-bold">
-                    {loadingDashboard ? "…" : summary?.low_stock_items ?? 0}
-                  </p>
-                </div>
+  <Link
+    className="block rounded-xl bg-white/10 p-4 transition hover:bg-white/20"
+    href="/inventory"
+  >
+    <p className="text-sm text-emerald-100">Low stock items</p>
+    <p className="mt-1 text-2xl font-bold">
+      {loadingDashboard ? "…" : summary?.low_stock_items ?? 0}
+    </p>
+  </Link>
 
-                <div className="rounded-xl bg-white/10 p-4">
-                  <p className="text-sm text-emerald-100">Maintenance due</p>
-                  <p className="mt-1 text-2xl font-bold">
-                    {loadingDashboard ? "…" : summary?.maintenance_due ?? 0}
-                  </p>
-                </div>
+  <Link
+    className="block rounded-xl bg-white/10 p-4 transition hover:bg-white/20"
+    href="/equipment"
+  >
+    <p className="text-sm text-emerald-100">Maintenance due</p>
+    <p className="mt-1 text-2xl font-bold">
+      {loadingDashboard ? "…" : summary?.maintenance_due ?? 0}
+    </p>
+  </Link>
 
-                <div className="rounded-xl bg-white/10 p-4">
-                  <p className="text-sm text-emerald-100">Overdue tasks</p>
-                  <p className="mt-1 text-2xl font-bold">
-                    {loadingDashboard ? "…" : summary?.overdue_tasks ?? 0}
-                  </p>
-                </div>
-              </div>
+  <Link
+    className="block rounded-xl bg-white/10 p-4 transition hover:bg-white/20"
+    href="/tasks"
+  >
+    <p className="text-sm text-emerald-100">Overdue tasks</p>
+    <p className="mt-1 text-2xl font-bold">
+      {loadingDashboard ? "…" : summary?.overdue_tasks ?? 0}
+    </p>
+  </Link>
+</div>
             </section>
           </div>
         </section>
