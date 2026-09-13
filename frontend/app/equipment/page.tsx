@@ -81,12 +81,35 @@ export default function EquipmentPage() {
   const [nextServiceDate, setNextServiceDate] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [editingEquipmentId, setEditingEquipmentId] = useState<number | null>(
+    null,
+  );
   const [maintenanceDueOnly, setMaintenanceDueOnly] = useState(false);
   const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingEquipment, setLoadingEquipment] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingEquipmentId, setDeletingEquipmentId] = useState<
+    number | null
+  >(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function resetForm() {
+    setName("");
+    setCategory("Tractor");
+    setAssetTag("");
+    setCondition("Good");
+    setPurchaseDate("");
+    setLastServiceDate("");
+    setNextServiceDate("");
+    setNotes("");
+    setEditingEquipmentId(null);
+  }
+
+  function closeForm() {
+    resetForm();
+    setShowForm(false);
+  }
 
   async function loadEquipment(farmId: number) {
     setLoadingEquipment(true);
@@ -160,7 +183,7 @@ export default function EquipmentPage() {
     }
 
     window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
-    setShowForm(false);
+    closeForm();
     loadEquipment(selectedFarmId);
   }, [selectedFarmId]);
 
@@ -168,11 +191,33 @@ export default function EquipmentPage() {
     setSelectedFarmId(Number(event.target.value));
   }
 
+  function openCreateForm() {
+    resetForm();
+    setError(null);
+    setShowForm(true);
+  }
+
+  function openEditForm(item: Equipment) {
+    setError(null);
+    setEditingEquipmentId(item.id);
+    setName(item.name);
+    setCategory(item.category);
+    setAssetTag(item.asset_tag ?? "");
+    setCondition(item.condition);
+    setPurchaseDate(item.purchase_date ?? "");
+    setLastServiceDate(item.last_service_date ?? "");
+    setNextServiceDate(item.next_service_date ?? "");
+    setNotes(item.notes ?? "");
+    setShowForm(true);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (selectedFarmId === null) {
-      setError("Select a farm before adding equipment.");
+      setError("Select a farm before saving equipment.");
       return;
     }
 
@@ -186,56 +231,122 @@ export default function EquipmentPage() {
       return;
     }
 
+    const isEditing = editingEquipmentId !== null;
+
+    const createPayload = {
+      farm_id: selectedFarmId,
+      name: name.trim(),
+      category: category.trim(),
+      asset_tag: assetTag.trim() || null,
+      condition,
+      purchase_date: purchaseDate || null,
+      last_service_date: lastServiceDate || null,
+      next_service_date: nextServiceDate || null,
+      notes: notes.trim() || null,
+    };
+
+    const updatePayload = {
+      name: name.trim(),
+      category: category.trim(),
+      asset_tag: assetTag.trim() || null,
+      condition,
+      purchase_date: purchaseDate || null,
+      last_service_date: lastServiceDate || null,
+      next_service_date: nextServiceDate || null,
+      notes: notes.trim() || null,
+    };
+
+    const endpoint = isEditing
+      ? `${API_URL}/api/v1/equipment/${editingEquipmentId}`
+      : `${API_URL}/api/v1/equipment`;
+
     setSaving(true);
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/equipment`, {
-        method: "POST",
+      const response = await fetch(endpoint, {
+        method: isEditing ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          farm_id: selectedFarmId,
-          name: name.trim(),
-          category: category.trim(),
-          asset_tag: assetTag.trim() || null,
-          condition,
-          purchase_date: purchaseDate || null,
-          last_service_date: lastServiceDate || null,
-          next_service_date: nextServiceDate || null,
-          notes: notes.trim() || null,
-        }),
+        body: JSON.stringify(isEditing ? updatePayload : createPayload),
       });
 
       if (!response.ok) {
         const responseBody = await response.text();
         throw new Error(
           responseBody ||
-            `Could not create equipment. Server returned ${response.status}.`,
+            `Could not ${isEditing ? "update" : "create"} equipment. Server returned ${response.status}.`,
         );
       }
 
-      const newEquipment: Equipment = await response.json();
+      const savedEquipment: Equipment = await response.json();
 
-      setEquipment((currentEquipment) => [...currentEquipment, newEquipment]);
-      setName("");
-      setCategory("Tractor");
-      setAssetTag("");
-      setCondition("Good");
-      setPurchaseDate("");
-      setLastServiceDate("");
-      setNextServiceDate("");
-      setNotes("");
-      setShowForm(false);
+      if (isEditing) {
+        setEquipment((currentEquipment) =>
+          currentEquipment.map((item) =>
+            item.id === savedEquipment.id ? savedEquipment : item,
+          ),
+        );
+      } else {
+        setEquipment((currentEquipment) => [
+          ...currentEquipment,
+          savedEquipment,
+        ]);
+      }
+
+      closeForm();
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to create equipment.",
+          : `Unable to ${isEditing ? "update" : "create"} equipment.`,
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete(item: Equipment) {
+    const shouldDelete = window.confirm(
+      `Delete "${item.name}"? Its maintenance logs may also be removed. This action cannot be undone.`,
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingEquipmentId(item.id);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/equipment/${item.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const responseBody = await response.text();
+        throw new Error(
+          responseBody ||
+            `Could not delete equipment. Server returned ${response.status}.`,
+        );
+      }
+
+      setEquipment((currentEquipment) =>
+        currentEquipment.filter((currentItem) => currentItem.id !== item.id),
+      );
+
+      if (editingEquipmentId === item.id) {
+        closeForm();
+      }
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to delete equipment.",
+      );
+    } finally {
+      setDeletingEquipmentId(null);
     }
   }
 
@@ -295,8 +406,11 @@ export default function EquipmentPage() {
             className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={selectedFarmId === null}
             onClick={() => {
-              setError(null);
-              setShowForm((visible) => !visible);
+              if (showForm) {
+                closeForm();
+              } else {
+                openCreateForm();
+              }
             }}
             type="button"
           >
@@ -362,11 +476,12 @@ export default function EquipmentPage() {
         {showForm ? (
           <section className="mt-6 rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-bold text-slate-900">
-              Add equipment
+              {editingEquipmentId === null ? "Add equipment" : "Edit equipment"}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Record a machine, vehicle, tool, or other asset for{" "}
-              {selectedFarm?.name ?? "the selected farm"}.
+              {editingEquipmentId === null
+                ? `Record a machine, vehicle, tool, or other asset for ${selectedFarm?.name ?? "the selected farm"}.`
+                : "Update equipment details, condition, and service dates."}
             </p>
 
             <form
@@ -478,12 +593,18 @@ export default function EquipmentPage() {
                   disabled={saving}
                   type="submit"
                 >
-                  {saving ? "Adding equipment…" : "Add equipment"}
+                  {saving
+                    ? editingEquipmentId === null
+                      ? "Adding equipment…"
+                      : "Saving changes…"
+                    : editingEquipmentId === null
+                      ? "Add equipment"
+                      : "Save changes"}
                 </button>
                 <button
                   className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                   disabled={saving}
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
                   type="button"
                 >
                   Cancel
@@ -557,7 +678,7 @@ export default function EquipmentPage() {
               {!maintenanceDueOnly ? (
                 <button
                   className="mt-5 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                  onClick={() => setShowForm(true)}
+                  onClick={openCreateForm}
                   type="button"
                 >
                   Add your first equipment item
@@ -632,12 +753,35 @@ export default function EquipmentPage() {
                         {item.notes}
                       </p>
                     ) : null}
-                    <Link
-  className="mt-4 inline-flex text-sm font-semibold text-emerald-700 transition hover:text-emerald-900"
-  href={`/maintenance?equipment_id=${item.id}`}
->
-  View maintenance history →
-</Link>
+
+                    <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-4">
+                      <Link
+                        className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-900"
+                        href={`/maintenance?equipment_id=${item.id}`}
+                      >
+                        History →
+                      </Link>
+
+                      <button
+                        className="text-sm font-semibold text-sky-700 transition hover:text-sky-900 disabled:opacity-50"
+                        disabled={deletingEquipmentId === item.id}
+                        onClick={() => openEditForm(item)}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        className="text-sm font-semibold text-red-700 transition hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={deletingEquipmentId === item.id}
+                        onClick={() => handleDelete(item)}
+                        type="button"
+                      >
+                        {deletingEquipmentId === item.id
+                          ? "Deleting…"
+                          : "Delete"}
+                      </button>
+                    </div>
                   </article>
                 );
               })}

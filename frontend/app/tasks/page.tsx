@@ -9,14 +9,30 @@ type Farm = {
   location: string | null;
 };
 
+type Field = {
+  id: number;
+  farm_id: number;
+  name: string;
+};
+
+type Crop = {
+  id: number;
+  field_id: number;
+  name: string;
+  variety: string | null;
+};
+
 type Task = {
   id: number;
-  title: string;
   farm_id: number;
+  field_id: number | null;
+  crop_id: number | null;
+  title: string;
+  description: string | null;
   due_date: string | null;
   priority: string;
   status: string;
-  description: string | null;
+  notes: string | null;
 };
 
 const API_URL =
@@ -74,48 +90,94 @@ function isOverdue(task: Task) {
 
 export default function TasksPage() {
   const [farms, setFarms] = useState<Farm[]>([]);
+  const [fields, setFields] = useState<Field[]>([]);
+  const [crops, setCrops] = useState<Crop[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
 
+  const [fieldId, setFieldId] = useState("");
+  const [cropId, setCropId] = useState("");
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [status, setStatus] = useState("To Do");
   const [description, setDescription] = useState("");
+  const [notes, setNotes] = useState("");
 
   const [statusFilter, setStatusFilter] = useState("All");
   const [priorityFilter, setPriorityFilter] = useState("All");
 
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [loadingFarms, setLoadingFarms] = useState(true);
-  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadTasks(farmId: number) {
-    setLoadingTasks(true);
+  function resetForm() {
+    setFieldId("");
+    setCropId("");
+    setTitle("");
+    setDueDate("");
+    setPriority("Medium");
+    setStatus("To Do");
+    setDescription("");
+    setNotes("");
+    setEditingTaskId(null);
+  }
+
+  function closeForm() {
+    resetForm();
+    setShowForm(false);
+  }
+
+  async function loadFarmData(farmId: number) {
+    setLoadingData(true);
     setError(null);
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/v1/tasks?farm_id=${farmId}`,
-      );
+      const [fieldsResponse, cropsResponse, tasksResponse] = await Promise.all([
+        fetch(`${API_URL}/api/v1/fields?farm_id=${farmId}`),
+        fetch(`${API_URL}/api/v1/crops?farm_id=${farmId}`),
+        fetch(`${API_URL}/api/v1/tasks?farm_id=${farmId}`),
+      ]);
 
-      if (!response.ok) {
-        throw new Error(`Task request failed with status ${response.status}`);
+      if (!fieldsResponse.ok) {
+        throw new Error(
+          `Field request failed with status ${fieldsResponse.status}`,
+        );
       }
 
-      const data: Task[] = await response.json();
-      setTasks(data);
+      if (!cropsResponse.ok) {
+        throw new Error(
+          `Crop request failed with status ${cropsResponse.status}`,
+        );
+      }
+
+      if (!tasksResponse.ok) {
+        throw new Error(
+          `Task request failed with status ${tasksResponse.status}`,
+        );
+      }
+
+      const [fieldData, cropData, taskData] = await Promise.all([
+        fieldsResponse.json() as Promise<Field[]>,
+        cropsResponse.json() as Promise<Crop[]>,
+        tasksResponse.json() as Promise<Task[]>,
+      ]);
+
+      setFields(fieldData);
+      setCrops(cropData);
+      setTasks(taskData);
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to load tasks.",
+          : "Unable to load task data.",
       );
     } finally {
-      setLoadingTasks(false);
+      setLoadingData(false);
     }
   }
 
@@ -158,24 +220,63 @@ export default function TasksPage() {
 
   useEffect(() => {
     if (selectedFarmId === null) {
+      setFields([]);
+      setCrops([]);
       setTasks([]);
       return;
     }
 
     window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
-    setShowForm(false);
-    loadTasks(selectedFarmId);
+    closeForm();
+    loadFarmData(selectedFarmId);
   }, [selectedFarmId]);
 
   function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
     setSelectedFarmId(Number(event.target.value));
   }
 
+  function handleFieldChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    const nextFieldId = event.target.value;
+    setFieldId(nextFieldId);
+
+    if (
+      cropId &&
+      !crops.some(
+        (crop) =>
+          crop.id === Number(cropId) && crop.field_id === Number(nextFieldId),
+      )
+    ) {
+      setCropId("");
+    }
+  }
+
+  function openCreateForm() {
+    resetForm();
+    setError(null);
+    setShowForm(true);
+  }
+
+  function openEditForm(task: Task) {
+    setError(null);
+    setEditingTaskId(task.id);
+    setFieldId(task.field_id === null ? "" : String(task.field_id));
+    setCropId(task.crop_id === null ? "" : String(task.crop_id));
+    setTitle(task.title);
+    setDueDate(task.due_date ?? "");
+    setPriority(task.priority);
+    setStatus(task.status);
+    setDescription(task.description ?? "");
+    setNotes(task.notes ?? "");
+    setShowForm(true);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (selectedFarmId === null) {
-      setError("Select a farm before creating a task.");
+      setError("Select a farm before saving a task.");
       return;
     }
 
@@ -184,96 +285,147 @@ export default function TasksPage() {
       return;
     }
 
+    const parsedFieldId = fieldId ? Number(fieldId) : null;
+    const parsedCropId = cropId ? Number(cropId) : null;
+
+    if (
+      parsedFieldId !== null &&
+      (!Number.isInteger(parsedFieldId) || parsedFieldId <= 0)
+    ) {
+      setError("Select a valid field.");
+      return;
+    }
+
+    if (
+      parsedCropId !== null &&
+      (!Number.isInteger(parsedCropId) || parsedCropId <= 0)
+    ) {
+      setError("Select a valid crop.");
+      return;
+    }
+
+    const isEditing = editingTaskId !== null;
+
+    const createPayload = {
+      farm_id: selectedFarmId,
+      field_id: parsedFieldId,
+      crop_id: parsedCropId,
+      title: title.trim(),
+      description: description.trim() || null,
+      due_date: dueDate || null,
+      priority,
+      status,
+      notes: notes.trim() || null,
+    };
+
+    const updatePayload = {
+      field_id: parsedFieldId,
+      crop_id: parsedCropId,
+      title: title.trim(),
+      description: description.trim() || null,
+      due_date: dueDate || null,
+      priority,
+      status,
+      notes: notes.trim() || null,
+    };
+
+    const endpoint = isEditing
+      ? `${API_URL}/api/v1/tasks/${editingTaskId}`
+      : `${API_URL}/api/v1/tasks`;
+
     setSaving(true);
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/tasks`, {
-        method: "POST",
+      const response = await fetch(endpoint, {
+        method: isEditing ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          farm_id: selectedFarmId,
-          title: title.trim(),
-          due_date: dueDate || null,
-          priority,
-          status,
-          description: description.trim() || null,
-        }),
+        body: JSON.stringify(isEditing ? updatePayload : createPayload),
       });
 
       if (!response.ok) {
         const responseBody = await response.text();
         throw new Error(
           responseBody ||
-            `Could not create task. Server returned ${response.status}.`,
+            `Could not ${isEditing ? "update" : "create"} task. Server returned ${response.status}.`,
         );
       }
 
-      const newTask: Task = await response.json();
-      setTasks((currentTasks) => [...currentTasks, newTask]);
+      const savedTask: Task = await response.json();
 
-      setTitle("");
-      setDueDate("");
-      setPriority("Medium");
-      setStatus("To Do");
-      setDescription("");
-      setShowForm(false);
+      if (isEditing) {
+        setTasks((currentTasks) =>
+          currentTasks.map((task) =>
+            task.id === savedTask.id ? savedTask : task,
+          ),
+        );
+      } else {
+        setTasks((currentTasks) => [...currentTasks, savedTask]);
+      }
+
+      closeForm();
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to create task.",
+          : `Unable to ${isEditing ? "update" : "create"} task.`,
       );
     } finally {
       setSaving(false);
     }
   }
 
-  async function updateTaskStatus(task: Task, nextStatus: string) {
-    setUpdatingTaskId(task.id);
+  async function handleDelete(task: Task) {
+    const shouldDelete = window.confirm(
+      `Delete "${task.title}"? This task will be permanently removed.`,
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingTaskId(task.id);
     setError(null);
 
     try {
       const response = await fetch(`${API_URL}/api/v1/tasks/${task.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: nextStatus,
-        }),
+        method: "DELETE",
       });
 
       if (!response.ok) {
         const responseBody = await response.text();
         throw new Error(
           responseBody ||
-            `Could not update task. Server returned ${response.status}.`,
+            `Could not delete task. Server returned ${response.status}.`,
         );
       }
 
-      const updatedTask: Task = await response.json();
-
       setTasks((currentTasks) =>
-        currentTasks.map((currentTask) =>
-          currentTask.id === updatedTask.id ? updatedTask : currentTask,
-        ),
+        currentTasks.filter((currentTask) => currentTask.id !== task.id),
       );
+
+      if (editingTaskId === task.id) {
+        closeForm();
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to update task.",
+          : "Unable to delete task.",
       );
     } finally {
-      setUpdatingTaskId(null);
+      setDeletingTaskId(null);
     }
   }
 
   const selectedFarm =
     farms.find((farm) => farm.id === selectedFarmId) ?? null;
+
+  const availableCrops = fieldId
+    ? crops.filter((crop) => crop.field_id === Number(fieldId))
+    : crops;
 
   const filteredTasks = useMemo(
     () =>
@@ -296,6 +448,14 @@ export default function TasksPage() {
   const completedTaskCount = tasks.filter(
     (task) => task.status.toLowerCase() === "completed",
   ).length;
+
+  const fieldNameById = new Map(fields.map((field) => [field.id, field.name]));
+  const cropNameById = new Map(
+    crops.map((crop) => [
+      crop.id,
+      crop.variety ? `${crop.name} · ${crop.variety}` : crop.name,
+    ]),
+  );
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -332,8 +492,8 @@ export default function TasksPage() {
               Tasks
             </h1>
             <p className="mt-2 max-w-2xl text-slate-600">
-              Plan farm work, set priorities, and mark completed work as it is
-              finished.
+              Plan farm work, link tasks to fields or crops, and track
+              completion.
             </p>
           </div>
 
@@ -341,8 +501,11 @@ export default function TasksPage() {
             className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={selectedFarmId === null}
             onClick={() => {
-              setError(null);
-              setShowForm((visible) => !visible);
+              if (showForm) {
+                closeForm();
+              } else {
+                openCreateForm();
+              }
             }}
             type="button"
           >
@@ -412,9 +575,13 @@ export default function TasksPage() {
 
         {showForm ? (
           <section className="mt-6 rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-900">Create a task</h2>
+            <h2 className="text-lg font-bold text-slate-900">
+              {editingTaskId === null ? "Create a task" : "Edit task"}
+            </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Schedule work for {selectedFarm?.name ?? "the selected farm"}.
+              {editingTaskId === null
+                ? `Schedule work for ${selectedFarm?.name ?? "the selected farm"}.`
+                : "Update the task’s assignment, timeline, priority, and status."}
             </p>
 
             <form
@@ -432,6 +599,42 @@ export default function TasksPage() {
                   required
                   value={title}
                 />
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
+                Field
+                <select
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  disabled={saving}
+                  onChange={handleFieldChange}
+                  value={fieldId}
+                >
+                  <option value="">No field assigned</option>
+                  {fields.map((field) => (
+                    <option key={field.id} value={field.id}>
+                      {field.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
+                Crop
+                <select
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  disabled={saving}
+                  onChange={(event) => setCropId(event.target.value)}
+                  value={cropId}
+                >
+                  <option value="">No crop assigned</option>
+                  {availableCrops.map((crop) => (
+                    <option key={crop.id} value={crop.id}>
+                      {crop.variety
+                        ? `${crop.name} · ${crop.variety}`
+                        : crop.name}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label className="text-sm font-medium text-slate-700">
@@ -462,7 +665,7 @@ export default function TasksPage() {
               </label>
 
               <label className="text-sm font-medium text-slate-700">
-                Initial status
+                Status
                 <select
                   className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   disabled={saving}
@@ -488,18 +691,35 @@ export default function TasksPage() {
                 />
               </label>
 
+              <label className="text-sm font-medium text-slate-700 sm:col-span-2">
+                Notes
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  disabled={saving}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Optional follow-up notes"
+                  value={notes}
+                />
+              </label>
+
               <div className="flex gap-3 sm:col-span-2">
                 <button
                   className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={saving}
                   type="submit"
                 >
-                  {saving ? "Creating task…" : "Create task"}
+                  {saving
+                    ? editingTaskId === null
+                      ? "Creating task…"
+                      : "Saving changes…"
+                    : editingTaskId === null
+                      ? "Create task"
+                      : "Save changes"}
                 </button>
                 <button
                   className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                   disabled={saving}
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
                   type="button"
                 >
                   Cancel
@@ -555,7 +775,7 @@ export default function TasksPage() {
             </div>
           </div>
 
-          {loadingFarms || loadingTasks ? (
+          {loadingFarms || loadingData ? (
             <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
               Loading tasks…
             </div>
@@ -589,7 +809,7 @@ export default function TasksPage() {
               {tasks.length === 0 ? (
                 <button
                   className="mt-5 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                  onClick={() => setShowForm(true)}
+                  onClick={openCreateForm}
                   type="button"
                 >
                   Create your first task
@@ -604,56 +824,48 @@ export default function TasksPage() {
                     className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between"
                     key={task.id}
                   >
-                    <div className="flex min-w-0 items-start gap-4">
-                      <button
-                        aria-label={
-                          task.status === "Completed"
-                            ? `Mark ${task.title} as to do`
-                            : `Mark ${task.title} as completed`
-                        }
-                        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition ${
-                          task.status === "Completed"
-                            ? "border-emerald-600 bg-emerald-600 text-white"
-                            : "border-slate-300 text-transparent hover:border-emerald-600"
-                        }`}
-                        disabled={updatingTaskId === task.id}
-                        onClick={() =>
-                          updateTaskStatus(
-                            task,
-                            task.status === "Completed" ? "To Do" : "Completed",
-                          )
-                        }
-                        type="button"
-                      >
-                        ✓
-                      </button>
-
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3
-                            className={`font-bold ${
-                              task.status === "Completed"
-                                ? "text-slate-400 line-through"
-                                : "text-slate-900"
-                            }`}
-                          >
-                            {task.title}
-                          </h3>
-                          {isOverdue(task) ? (
-                            <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">
-                              Overdue
-                            </span>
-                          ) : null}
-                        </div>
-
-                        <p className="mt-1 text-sm text-slate-500">
-                          Due {formatDate(task.due_date)}
-                          {task.description ? ` · ${task.description}` : ""}
-                        </p>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3
+                          className={`font-bold ${
+                            task.status === "Completed"
+                              ? "text-slate-400 line-through"
+                              : "text-slate-900"
+                          }`}
+                        >
+                          {task.title}
+                        </h3>
+                        {isOverdue(task) ? (
+                          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">
+                            Overdue
+                          </span>
+                        ) : null}
                       </div>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        Due {formatDate(task.due_date)}
+                        {task.field_id
+                          ? ` · ${fieldNameById.get(task.field_id) ?? "Field unavailable"}`
+                          : ""}
+                        {task.crop_id
+                          ? ` · ${cropNameById.get(task.crop_id) ?? "Crop unavailable"}`
+                          : ""}
+                      </p>
+
+                      {task.description ? (
+                        <p className="mt-2 text-sm text-slate-600">
+                          {task.description}
+                        </p>
+                      ) : null}
+
+                      {task.notes ? (
+                        <p className="mt-2 text-sm text-slate-500">
+                          Notes: {task.notes}
+                        </p>
+                      ) : null}
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-bold ${priorityClass(task.priority)}`}
                       >
@@ -662,10 +874,24 @@ export default function TasksPage() {
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-bold ${statusClass(task.status)}`}
                       >
-                        {updatingTaskId === task.id
-                          ? "Updating…"
-                          : task.status}
+                        {task.status}
                       </span>
+                      <button
+                        className="text-sm font-semibold text-sky-700 transition hover:text-sky-900 disabled:opacity-50"
+                        disabled={deletingTaskId === task.id}
+                        onClick={() => openEditForm(task)}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="text-sm font-semibold text-red-700 transition hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={deletingTaskId === task.id}
+                        onClick={() => handleDelete(task)}
+                        type="button"
+                      >
+                        {deletingTaskId === task.id ? "Deleting…" : "Delete"}
+                      </button>
                     </div>
                   </article>
                 ))}
