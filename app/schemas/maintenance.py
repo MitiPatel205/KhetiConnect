@@ -11,30 +11,58 @@ class MaintenanceLogBase(BaseModel):
     description: str = Field(
         min_length=2,
         max_length=500,
-        examples=["Oil change and filter replacement"]
+        examples=["Oil change and filter replacement"],
     )
 
     cost: float | None = Field(
         default=None,
         ge=0,
-        examples=[180.00]
+        examples=[180.00],
     )
 
     provider: str | None = Field(
         default=None,
         max_length=150,
-        examples=["Farm Equipment Service LLC"]
+        examples=["Farm Equipment Service LLC"],
     )
 
     notes: str | None = Field(
         default=None,
         max_length=2000,
-        examples=["Next service due in three months."]
+        examples=["Next service due in three months."],
     )
 
 
 class MaintenanceLogCreate(MaintenanceLogBase):
     pass
+
+
+class MaintenanceLogUpdate(BaseModel):
+    service_date: date = Field(examples=["2026-07-15"])
+
+    description: str = Field(
+        min_length=2,
+        max_length=500,
+        examples=["Oil change and filter replacement"],
+    )
+
+    cost: float | None = Field(
+        default=None,
+        ge=0,
+        examples=[180.00],
+    )
+
+    provider: str | None = Field(
+        default=None,
+        max_length=150,
+        examples=["Farm Equipment Service LLC"],
+    )
+
+    notes: str | None = Field(
+        default=None,
+        max_length=2000,
+        examples=["Next service due in three months."],
+    )
 
 
 class MaintenanceLogResponse(MaintenanceLogBase):
