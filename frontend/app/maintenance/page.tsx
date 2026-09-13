@@ -72,12 +72,28 @@ export default function MaintenancePage() {
   const [provider, setProvider] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [editingLogId, setEditingLogId] = useState<number | null>(null);
   const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingEquipment, setLoadingEquipment] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingLogId, setDeletingLogId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function resetForm() {
+    setServiceDate("");
+    setDescription("");
+    setCost("");
+    setProvider("");
+    setNotes("");
+    setEditingLogId(null);
+  }
+
+  function closeForm() {
+    resetForm();
+    setShowForm(false);
+  }
 
   async function loadEquipment(farmId: number) {
     setLoadingEquipment(true);
@@ -97,12 +113,12 @@ export default function MaintenancePage() {
       const data: Equipment[] = await response.json();
       setEquipment(data);
 
-      const savedEquipmentId = new URLSearchParams(
+      const queryEquipmentId = new URLSearchParams(
         window.location.search,
       ).get("equipment_id");
 
-      const parsedEquipmentId = savedEquipmentId
-        ? Number(savedEquipmentId)
+      const parsedEquipmentId = queryEquipmentId
+        ? Number(queryEquipmentId)
         : null;
 
       if (
@@ -200,7 +216,7 @@ export default function MaintenancePage() {
     }
 
     window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
-    setShowForm(false);
+    closeForm();
     setLogs([]);
     loadEquipment(selectedFarmId);
   }, [selectedFarmId]);
@@ -211,7 +227,7 @@ export default function MaintenancePage() {
       return;
     }
 
-    setShowForm(false);
+    closeForm();
     loadLogs(selectedEquipmentId);
   }, [selectedEquipmentId]);
 
@@ -225,11 +241,30 @@ export default function MaintenancePage() {
     setSelectedEquipmentId(Number(event.target.value));
   }
 
+  function openCreateForm() {
+    resetForm();
+    setError(null);
+    setShowForm(true);
+  }
+
+  function openEditForm(log: MaintenanceLog) {
+    setError(null);
+    setEditingLogId(log.id);
+    setServiceDate(log.service_date);
+    setDescription(log.description);
+    setCost(log.cost === null ? "" : String(log.cost));
+    setProvider(log.provider ?? "");
+    setNotes(log.notes ?? "");
+    setShowForm(true);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (selectedEquipmentId === null) {
-      setError("Select equipment before adding a maintenance log.");
+      setError("Select equipment before saving a maintenance log.");
       return;
     }
 
@@ -245,55 +280,122 @@ export default function MaintenancePage() {
 
     const parsedCost = cost.trim() ? Number(cost) : null;
 
-    if (parsedCost !== null && (!Number.isFinite(parsedCost) || parsedCost < 0)) {
+    if (
+      parsedCost !== null &&
+      (!Number.isFinite(parsedCost) || parsedCost < 0)
+    ) {
       setError("Cost must be zero or a positive number.");
       return;
     }
+
+    const isEditing = editingLogId !== null;
+
+    const createPayload = {
+      equipment_id: selectedEquipmentId,
+      service_date: serviceDate,
+      description: description.trim(),
+      cost: parsedCost,
+      provider: provider.trim() || null,
+      notes: notes.trim() || null,
+    };
+
+    const updatePayload = {
+      service_date: serviceDate,
+      description: description.trim(),
+      cost: parsedCost,
+      provider: provider.trim() || null,
+      notes: notes.trim() || null,
+    };
+
+    const endpoint = isEditing
+      ? `${API_URL}/api/v1/maintenance-logs/${editingLogId}`
+      : `${API_URL}/api/v1/maintenance-logs`;
 
     setSaving(true);
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/maintenance-logs`, {
-        method: "POST",
+      const response = await fetch(endpoint, {
+        method: isEditing ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          equipment_id: selectedEquipmentId,
-          service_date: serviceDate,
-          description: description.trim(),
-          cost: parsedCost,
-          provider: provider.trim() || null,
-          notes: notes.trim() || null,
-        }),
+        body: JSON.stringify(isEditing ? updatePayload : createPayload),
       });
 
       if (!response.ok) {
         const responseBody = await response.text();
         throw new Error(
           responseBody ||
-            `Could not create maintenance log. Server returned ${response.status}.`,
+            `Could not ${isEditing ? "update" : "create"} maintenance log. Server returned ${response.status}.`,
         );
       }
 
-      const newLog: MaintenanceLog = await response.json();
+      const savedLog: MaintenanceLog = await response.json();
 
-      setLogs((currentLogs) => [newLog, ...currentLogs]);
-      setServiceDate("");
-      setDescription("");
-      setCost("");
-      setProvider("");
-      setNotes("");
-      setShowForm(false);
+      if (isEditing) {
+        setLogs((currentLogs) =>
+          currentLogs.map((log) => (log.id === savedLog.id ? savedLog : log)),
+        );
+      } else {
+        setLogs((currentLogs) => [savedLog, ...currentLogs]);
+      }
+
+      closeForm();
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to create maintenance log.",
+          : `Unable to ${isEditing ? "update" : "create"} maintenance log.`,
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete(log: MaintenanceLog) {
+    const shouldDelete = window.confirm(
+      `Delete the maintenance record "${log.description}" from ${formatDate(log.service_date)}? This action cannot be undone.`,
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingLogId(log.id);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/v1/maintenance-logs/${log.id}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (!response.ok) {
+        const responseBody = await response.text();
+        throw new Error(
+          responseBody ||
+            `Could not delete maintenance log. Server returned ${response.status}.`,
+        );
+      }
+
+      setLogs((currentLogs) =>
+        currentLogs.filter((currentLog) => currentLog.id !== log.id),
+      );
+
+      if (editingLogId === log.id) {
+        closeForm();
+      }
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to delete maintenance log.",
+      );
+    } finally {
+      setDeletingLogId(null);
     }
   }
 
@@ -338,8 +440,8 @@ export default function MaintenancePage() {
               Maintenance logs
             </h1>
             <p className="mt-2 max-w-2xl text-slate-600">
-              Record inspections, repairs, and scheduled service for every
-              equipment item.
+              Record, update, and organize inspections, repairs, and scheduled
+              service for every equipment item.
             </p>
           </div>
 
@@ -347,8 +449,11 @@ export default function MaintenancePage() {
             className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={selectedEquipmentId === null}
             onClick={() => {
-              setError(null);
-              setShowForm((visible) => !visible);
+              if (showForm) {
+                closeForm();
+              } else {
+                openCreateForm();
+              }
             }}
             type="button"
           >
@@ -457,11 +562,14 @@ export default function MaintenancePage() {
         {showForm ? (
           <section className="mt-6 rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-bold text-slate-900">
-              Add maintenance log
+              {editingLogId === null
+                ? "Add maintenance log"
+                : "Edit maintenance log"}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Record completed work for{" "}
-              {selectedEquipment?.name ?? "the selected equipment"}.
+              {editingLogId === null
+                ? `Record completed work for ${selectedEquipment?.name ?? "the selected equipment"}.`
+                : "Correct service details, recorded cost, provider, or notes."}
             </p>
 
             <form
@@ -535,12 +643,19 @@ export default function MaintenancePage() {
                   disabled={saving}
                   type="submit"
                 >
-                  {saving ? "Saving log…" : "Save maintenance log"}
+                  {saving
+                    ? editingLogId === null
+                      ? "Saving log…"
+                      : "Saving changes…"
+                    : editingLogId === null
+                      ? "Save maintenance log"
+                      : "Save changes"}
                 </button>
+
                 <button
                   className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                   disabled={saving}
-                  onClick={() => setShowForm(false)}
+                  onClick={closeForm}
                   type="button"
                 >
                   Cancel
@@ -562,6 +677,7 @@ export default function MaintenancePage() {
                   : "Select equipment to view its service history."}
               </p>
             </div>
+
             <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
               {logs.length} {logs.length === 1 ? "record" : "records"}
             </span>
@@ -592,7 +708,7 @@ export default function MaintenancePage() {
               </p>
               <button
                 className="mt-5 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
-                onClick={() => setShowForm(true)}
+                onClick={openCreateForm}
                 type="button"
               >
                 Add first maintenance log
@@ -630,6 +746,26 @@ export default function MaintenancePage() {
                       {log.notes}
                     </p>
                   ) : null}
+
+                  <div className="mt-5 flex gap-3 border-t border-slate-100 pt-4">
+                    <button
+                      className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-900 disabled:opacity-50"
+                      disabled={deletingLogId === log.id}
+                      onClick={() => openEditForm(log)}
+                      type="button"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      className="text-sm font-semibold text-red-700 transition hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={deletingLogId === log.id}
+                      onClick={() => handleDelete(log)}
+                      type="button"
+                    >
+                      {deletingLogId === log.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
