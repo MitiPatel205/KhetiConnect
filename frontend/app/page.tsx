@@ -282,13 +282,13 @@ export default function Home() {
           </p>
 
           <nav className="space-y-1 text-sm">
-            <a
-              className="flex items-center gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 font-semibold text-emerald-800"
-              href="/"
-            >
-              <span>⌂</span>
-              Dashboard
-            </a>
+            <Link
+  className="flex items-center gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 font-semibold text-emerald-800"
+  href="/"
+>
+  <span>⌂</span>
+  Dashboard
+</Link>
             <a
   className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
   href="/farms"
