@@ -9,6 +9,7 @@ from app.models.farm import Farm
 from app.models.field import Field
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
+from app.models.worker import Worker
 
 router = APIRouter(
     prefix="/tasks",
@@ -20,6 +21,7 @@ def validate_task_relationships(
     farm_id: int,
     field_id: int | None,
     crop_id: int | None,
+    worker_id: int | None,
     db: Session
 ):
     farm = db.get(Farm, farm_id)
@@ -53,7 +55,20 @@ def validate_task_relationships(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Crop does not belong to this field."
             )
+    if worker_id is not None:
+        worker = db.get(Worker, worker_id)
 
+        if worker is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Worker not found."
+            )
+
+        if worker.farm_id != farm_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Worker does not belong to this farm."
+            )
 
 @router.post(
     "",
@@ -68,6 +83,7 @@ def create_task(
         task_data.farm_id,
         task_data.field_id,
         task_data.crop_id,
+        task_data.worker_id,
         db
     )
 
@@ -146,11 +162,13 @@ def update_task(
 
     new_field_id = update_values.get("field_id", task.field_id)
     new_crop_id = update_values.get("crop_id", task.crop_id)
+    new_worker_id = update_values.get("worker_id", task.worker_id)
 
     validate_task_relationships(
         task.farm_id,
         new_field_id,
         new_crop_id,
+        new_worker_id,
         db
     )
 

@@ -289,48 +289,55 @@ export default function Home() {
   <span>⌂</span>
   Dashboard
 </Link>
-            <a
+            <Link
   className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
   href="/farms"
 >
   <span>⌘</span>
   Farms
-</a>
-            <a
+</Link>
+            <Link
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
               href="/fields"
             >
               <span>▦</span>
               Fields
-            </a>
-            <a
+            </Link>
+            <Link
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
               href="/crops"
             >
               <span>✿</span>
               Crops
-            </a>
-            <a
+            </Link>
+            <Link
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
               href="/tasks"
             >
               <span>✓</span>
               Tasks
-            </a>
-            <a
+            </Link>
+            <Link
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
               href="/inventory"
             >
               <span>▣</span>
               Inventory
-            </a>
-            <a
+            </Link>
+            <Link
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
               href="/equipment"
             >
               <span>⚙</span>
               Equipment
-            </a>
+            </Link>
+            <Link
+  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
+  href="/workers"
+>
+  <span>♙</span>
+  Workers
+</Link>
           </nav>
         </aside>
 

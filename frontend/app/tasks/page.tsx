@@ -22,11 +22,20 @@ type Crop = {
   variety: string | null;
 };
 
+type Worker = {
+  id: number;
+  farm_id: number;
+  name: string;
+  role: string | null;
+  is_active: boolean;
+};
+
 type Task = {
   id: number;
   farm_id: number;
   field_id: number | null;
   crop_id: number | null;
+  worker_id: number | null;
   title: string;
   description: string | null;
   due_date: string | null;
@@ -92,11 +101,13 @@ export default function TasksPage() {
   const [farms, setFarms] = useState<Farm[]>([]);
   const [fields, setFields] = useState<Field[]>([]);
   const [crops, setCrops] = useState<Crop[]>([]);
+  const [workers, setWorkers] = useState<Worker[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
 
   const [fieldId, setFieldId] = useState("");
   const [cropId, setCropId] = useState("");
+  const [workerId, setWorkerId] = useState("");
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState("Medium");
@@ -118,6 +129,7 @@ export default function TasksPage() {
   function resetForm() {
     setFieldId("");
     setCropId("");
+    setWorkerId("");
     setTitle("");
     setDueDate("");
     setPriority("Medium");
@@ -137,10 +149,16 @@ export default function TasksPage() {
     setError(null);
 
     try {
-      const [fieldsResponse, cropsResponse, tasksResponse] = await Promise.all([
+      const [
+        fieldsResponse,
+        cropsResponse,
+        tasksResponse,
+        workersResponse,
+      ] = await Promise.all([
         fetch(`${API_URL}/api/v1/fields?farm_id=${farmId}`),
         fetch(`${API_URL}/api/v1/crops?farm_id=${farmId}`),
         fetch(`${API_URL}/api/v1/tasks?farm_id=${farmId}`),
+        fetch(`${API_URL}/api/v1/workers?farm_id=${farmId}`),
       ]);
 
       if (!fieldsResponse.ok) {
@@ -161,15 +179,23 @@ export default function TasksPage() {
         );
       }
 
-      const [fieldData, cropData, taskData] = await Promise.all([
+      if (!workersResponse.ok) {
+        throw new Error(
+          `Worker request failed with status ${workersResponse.status}`,
+        );
+      }
+
+      const [fieldData, cropData, taskData, workerData] = await Promise.all([
         fieldsResponse.json() as Promise<Field[]>,
         cropsResponse.json() as Promise<Crop[]>,
         tasksResponse.json() as Promise<Task[]>,
+        workersResponse.json() as Promise<Worker[]>,
       ]);
 
       setFields(fieldData);
       setCrops(cropData);
       setTasks(taskData);
+      setWorkers(workerData);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -222,6 +248,7 @@ export default function TasksPage() {
     if (selectedFarmId === null) {
       setFields([]);
       setCrops([]);
+      setWorkers([]);
       setTasks([]);
       return;
     }
@@ -261,6 +288,7 @@ export default function TasksPage() {
     setEditingTaskId(task.id);
     setFieldId(task.field_id === null ? "" : String(task.field_id));
     setCropId(task.crop_id === null ? "" : String(task.crop_id));
+    setWorkerId(task.worker_id === null ? "" : String(task.worker_id));
     setTitle(task.title);
     setDueDate(task.due_date ?? "");
     setPriority(task.priority);
@@ -287,6 +315,7 @@ export default function TasksPage() {
 
     const parsedFieldId = fieldId ? Number(fieldId) : null;
     const parsedCropId = cropId ? Number(cropId) : null;
+    const parsedWorkerId = workerId ? Number(workerId) : null;
 
     if (
       parsedFieldId !== null &&
@@ -304,12 +333,21 @@ export default function TasksPage() {
       return;
     }
 
+    if (
+      parsedWorkerId !== null &&
+      (!Number.isInteger(parsedWorkerId) || parsedWorkerId <= 0)
+    ) {
+      setError("Select a valid worker.");
+      return;
+    }
+
     const isEditing = editingTaskId !== null;
 
     const createPayload = {
       farm_id: selectedFarmId,
       field_id: parsedFieldId,
       crop_id: parsedCropId,
+      worker_id: parsedWorkerId,
       title: title.trim(),
       description: description.trim() || null,
       due_date: dueDate || null,
@@ -321,6 +359,7 @@ export default function TasksPage() {
     const updatePayload = {
       field_id: parsedFieldId,
       crop_id: parsedCropId,
+      worker_id: parsedWorkerId,
       title: title.trim(),
       description: description.trim() || null,
       due_date: dueDate || null,
@@ -427,6 +466,8 @@ export default function TasksPage() {
     ? crops.filter((crop) => crop.field_id === Number(fieldId))
     : crops;
 
+  const activeWorkers = workers.filter((worker) => worker.is_active);
+
   const filteredTasks = useMemo(
     () =>
       tasks.filter((task) => {
@@ -450,10 +491,18 @@ export default function TasksPage() {
   ).length;
 
   const fieldNameById = new Map(fields.map((field) => [field.id, field.name]));
+
   const cropNameById = new Map(
     crops.map((crop) => [
       crop.id,
       crop.variety ? `${crop.name} · ${crop.variety}` : crop.name,
+    ]),
+  );
+
+  const workerNameById = new Map(
+    workers.map((worker) => [
+      worker.id,
+      worker.role ? `${worker.name} · ${worker.role}` : worker.name,
     ]),
   );
 
@@ -492,8 +541,8 @@ export default function TasksPage() {
               Tasks
             </h1>
             <p className="mt-2 max-w-2xl text-slate-600">
-              Plan farm work, link tasks to fields or crops, and track
-              completion.
+              Plan farm work, assign workers, link tasks to fields or crops,
+              and track completion.
             </p>
           </div>
 
@@ -581,7 +630,7 @@ export default function TasksPage() {
             <p className="mt-1 text-sm text-slate-500">
               {editingTaskId === null
                 ? `Schedule work for ${selectedFarm?.name ?? "the selected farm"}.`
-                : "Update the task’s assignment, timeline, priority, and status."}
+                : "Update the task’s worker assignment, timeline, priority, and status."}
             </p>
 
             <form
@@ -632,6 +681,24 @@ export default function TasksPage() {
                       {crop.variety
                         ? `${crop.name} · ${crop.variety}`
                         : crop.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-sm font-medium text-slate-700">
+                Assign worker
+                <select
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  disabled={saving}
+                  onChange={(event) => setWorkerId(event.target.value)}
+                  value={workerId}
+                >
+                  <option value="">Unassigned</option>
+                  {activeWorkers.map((worker) => (
+                    <option key={worker.id} value={worker.id}>
+                      {worker.name}
+                      {worker.role ? ` — ${worker.role}` : ""}
                     </option>
                   ))}
                 </select>
@@ -716,6 +783,7 @@ export default function TasksPage() {
                       ? "Create task"
                       : "Save changes"}
                 </button>
+
                 <button
                   className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
                   disabled={saving}
@@ -835,6 +903,7 @@ export default function TasksPage() {
                         >
                           {task.title}
                         </h3>
+
                         {isOverdue(task) ? (
                           <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">
                             Overdue
@@ -850,6 +919,12 @@ export default function TasksPage() {
                         {task.crop_id
                           ? ` · ${cropNameById.get(task.crop_id) ?? "Crop unavailable"}`
                           : ""}
+                        {task.worker_id
+                          ? ` · Assigned to ${
+                              workerNameById.get(task.worker_id) ??
+                              "Worker unavailable"
+                            }`
+                          : " · Unassigned"}
                       </p>
 
                       {task.description ? (
@@ -871,11 +946,13 @@ export default function TasksPage() {
                       >
                         {task.priority}
                       </span>
+
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-bold ${statusClass(task.status)}`}
                       >
                         {task.status}
                       </span>
+
                       <button
                         className="text-sm font-semibold text-sky-700 transition hover:text-sky-900 disabled:opacity-50"
                         disabled={deletingTaskId === task.id}
@@ -884,6 +961,7 @@ export default function TasksPage() {
                       >
                         Edit
                       </button>
+
                       <button
                         className="text-sm font-semibold text-red-700 transition hover:text-red-900 disabled:cursor-not-allowed disabled:opacity-50"
                         disabled={deletingTaskId === task.id}

@@ -20,3 +20,5 @@ frontend/.next/
 frontend/.env.local
 
 kheticonnect.db
+# Local SQLite database backups
+backups/

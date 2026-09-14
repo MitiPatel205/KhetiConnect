@@ -12,6 +12,7 @@ class TaskBase(BaseModel):
 
     field_id: int | None = Field(default=None, gt=0, examples=[1])
     crop_id: int | None = Field(default=None, gt=0, examples=[1])
+    worker_id: int | None = Field(default=None, gt=0, examples=[1])
 
     title: str = Field(
         min_length=2,
@@ -65,6 +66,7 @@ class TaskCreate(TaskBase):
 class TaskUpdate(BaseModel):
     field_id: int | None = Field(default=None, gt=0)
     crop_id: int | None = Field(default=None, gt=0)
+    worker_id: int | None = Field(default=None, gt=0)
     title: str | None = Field(default=None, min_length=2, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
     due_date: date | None = None

@@ -29,6 +29,12 @@ class Task(Base):
         index=True
     )
 
+    worker_id: Mapped[int | None] = mapped_column(
+        ForeignKey("workers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -69,3 +75,8 @@ class Task(Base):
     farm = relationship("Farm")
     field = relationship("Field")
     crop = relationship("Crop")
+
+    worker = relationship(
+        "Worker",
+        back_populates="tasks"
+    )
