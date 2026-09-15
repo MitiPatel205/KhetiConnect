@@ -11,6 +11,7 @@ from app.models.field import Field
 from app.models.inventory import InventoryItem
 from app.models.task import Task
 from app.models.worker import Worker
+from app.schemas.dashboard import DashboardResponse
 
 router = APIRouter(
     prefix="/dashboard",
@@ -18,7 +19,10 @@ router = APIRouter(
 )
 
 
-@router.get("/summary")
+@router.get(
+    "/summary",
+    response_model=DashboardResponse
+)
 def get_dashboard_summary(
     farm_id: int = Query(gt=0),
     db: Session = Depends(get_db)
