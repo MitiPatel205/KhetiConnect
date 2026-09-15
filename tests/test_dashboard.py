@@ -27,6 +27,8 @@ def test_dashboard_summary_for_farm(client: TestClient):
     assert data["summary"]["total_fields"] == 0
     assert data["summary"]["active_crops"] == 0
     assert data["summary"]["open_tasks"] == 0
+    assert data["summary"]["active_workers"] == 0
+    assert data["summary"]["unassigned_open_tasks"] == 0
     assert data["summary"]["low_stock_items"] == 0
     assert data["summary"]["maintenance_due"] == 0
 

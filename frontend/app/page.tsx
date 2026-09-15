@@ -23,6 +23,8 @@ type DashboardData = {
     total_fields: number;
     active_crops: number;
     open_tasks: number;
+    active_workers: number;
+    unassigned_open_tasks: number;
     overdue_tasks: number;
     completed_tasks: number;
     low_stock_items: number;
@@ -206,40 +208,56 @@ export default function Home() {
   const summary = dashboard?.summary;
   const upcomingTasks = dashboard?.upcoming_tasks ?? [];
 
-  const cards = [
-  {
-    label: "Total Fields",
-    value: summary?.total_fields ?? "—",
-    note: "Fields managed",
-    icon: "▦",
-    color: "bg-emerald-50 text-emerald-700",
-    href: "/fields",
-  },
-  {
-    label: "Active Crops",
-    value: summary?.active_crops ?? "—",
-    note: "Currently growing",
-    icon: "✿",
-    color: "bg-lime-50 text-lime-700",
-    href: "/crops",
-  },
-  {
-    label: "Open Tasks",
-    value: summary?.open_tasks ?? "—",
-    note: `${summary?.overdue_tasks ?? 0} overdue`,
-    icon: "✓",
-    color: "bg-sky-50 text-sky-700",
-    href: "/tasks",
-  },
-  {
-    label: "Low Stock",
-    value: summary?.low_stock_items ?? "—",
-    note: "Items need attention",
-    icon: "▣",
-    color: "bg-amber-50 text-amber-700",
-    href: "/inventory",
-  },
-];
+   const cards = [
+    {
+      label: "Total Fields",
+      value: summary?.total_fields ?? "—",
+      note: "Fields managed",
+      icon: "▦",
+      color: "bg-emerald-50 text-emerald-700",
+      href: "/fields",
+    },
+    {
+      label: "Active Crops",
+      value: summary?.active_crops ?? "—",
+      note: "Currently growing",
+      icon: "✿",
+      color: "bg-lime-50 text-lime-700",
+      href: "/crops",
+    },
+    {
+      label: "Open Tasks",
+      value: summary?.open_tasks ?? "—",
+      note: `${summary?.overdue_tasks ?? 0} overdue`,
+      icon: "✓",
+      color: "bg-sky-50 text-sky-700",
+      href: "/tasks",
+    },
+    {
+      label: "Active Workers",
+      value: summary?.active_workers ?? "—",
+      note: "Available team members",
+      icon: "👩‍🌾",
+      color: "bg-indigo-50 text-indigo-700",
+      href: "/workers",
+    },
+    {
+      label: "Unassigned Tasks",
+      value: summary?.unassigned_open_tasks ?? "—",
+      note: "Open work without an owner",
+      icon: "⚠",
+      color: "bg-orange-50 text-orange-700",
+      href: "/tasks",
+    },
+    {
+      label: "Low Stock",
+      value: summary?.low_stock_items ?? "—",
+      note: "Items need attention",
+      icon: "▣",
+      color: "bg-amber-50 text-amber-700",
+      href: "/inventory",
+    },
+  ];
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">

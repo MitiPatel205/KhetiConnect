@@ -10,6 +10,7 @@ from app.models.farm import Farm
 from app.models.field import Field
 from app.models.inventory import InventoryItem
 from app.models.task import Task
+from app.models.worker import Worker
 
 router = APIRouter(
     prefix="/dashboard",
@@ -44,6 +45,17 @@ def get_dashboard_summary(
     open_tasks = db.query(Task).filter(
         Task.farm_id == farm_id,
         Task.status != "Completed"
+    ).count()
+
+    active_workers = db.query(Worker).filter(
+        Worker.farm_id == farm_id,
+        Worker.is_active.is_(True)
+    ).count()
+
+    unassigned_open_tasks = db.query(Task).filter(
+        Task.farm_id == farm_id,
+        Task.status != "Completed",
+        Task.worker_id.is_(None)
     ).count()
 
     overdue_tasks = db.query(Task).filter(
@@ -86,6 +98,8 @@ def get_dashboard_summary(
             "total_fields": total_fields,
             "active_crops": active_crops,
             "open_tasks": open_tasks,
+            "active_workers": active_workers,
+            "unassigned_open_tasks": unassigned_open_tasks,
             "overdue_tasks": overdue_tasks,
             "completed_tasks": completed_tasks,
             "low_stock_items": low_stock_items,
