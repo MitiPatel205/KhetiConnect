@@ -73,7 +73,9 @@ def update_maintenance_log(
             detail="Maintenance log not found.",
         )
 
-    for field_name, value in log_data.model_dump().items():
+    for field_name, value in log_data.model_dump(
+        exclude_unset=True
+    ).items():
         setattr(log, field_name, value)
 
     db.commit()

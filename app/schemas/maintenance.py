@@ -38,9 +38,13 @@ class MaintenanceLogCreate(MaintenanceLogBase):
 
 
 class MaintenanceLogUpdate(BaseModel):
-    service_date: date = Field(examples=["2026-07-15"])
+    service_date: date | None = Field(
+        default=None,
+        examples=["2026-07-15"],
+    )
 
-    description: str = Field(
+    description: str | None = Field(
+        default=None,
         min_length=2,
         max_length=500,
         examples=["Oil change and filter replacement"],
@@ -63,8 +67,6 @@ class MaintenanceLogUpdate(BaseModel):
         max_length=2000,
         examples=["Next service due in three months."],
     )
-
-
 class MaintenanceLogResponse(MaintenanceLogBase):
     id: int
     created_at: datetime
