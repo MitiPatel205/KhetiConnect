@@ -50,11 +50,20 @@ def validate_task_relationships(
                 detail="Crop not found."
             )
 
+        crop_field = db.get(Field, crop.field_id)
+
+        if crop_field is None or crop_field.farm_id != farm_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Crop does not belong to this farm."
+            )
+
         if field_id is not None and crop.field_id != field_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Crop does not belong to this field."
             )
+
     if worker_id is not None:
         worker = db.get(Worker, worker_id)
 
