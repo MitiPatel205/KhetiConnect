@@ -6,6 +6,7 @@ from app.models.crop import Crop
 from app.models.field import Field
 from app.schemas.crop import CropCreate, CropResponse, CropUpdate
 
+
 router = APIRouter(
     prefix="/crops",
     tags=["Crops"]
@@ -41,11 +42,15 @@ def create_crop(
     response_model=list[CropResponse]
 )
 def list_crops(
+    farm_id: int | None = Query(default=None, gt=0),
     field_id: int | None = Query(default=None, gt=0),
     status_filter: str | None = Query(default=None, alias="status"),
     db: Session = Depends(get_db)
 ):
     query = db.query(Crop)
+
+    if farm_id is not None:
+        query = query.join(Field).filter(Field.farm_id == farm_id)
 
     if field_id is not None:
         query = query.filter(Crop.field_id == field_id)
@@ -92,7 +97,28 @@ def update_crop(
             detail="Crop not found."
         )
 
-    for field_name, value in crop_data.model_dump(exclude_unset=True).items():
+    update_values = crop_data.model_dump(exclude_unset=True)
+
+    new_planting_date = update_values.get(
+        "planting_date",
+        crop.planting_date
+    )
+    new_expected_harvest_date = update_values.get(
+        "expected_harvest_date",
+        crop.expected_harvest_date
+    )
+
+    if (
+        new_planting_date is not None
+        and new_expected_harvest_date is not None
+        and new_expected_harvest_date < new_planting_date
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Expected harvest date cannot be before planting date."
+        )
+
+    for field_name, value in update_values.items():
         setattr(crop, field_name, value)
 
     db.commit()
