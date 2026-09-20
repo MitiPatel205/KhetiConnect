@@ -3,11 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-type Farm = {
-  id: number;
-  name: string;
-  location: string | null;
-};
+import { useSelectedFarm } from "../../hooks/use-selected-farm";
 
 type Equipment = {
   id: number;
@@ -57,11 +53,18 @@ function formatCurrency(value: number | null) {
 }
 
 export default function MaintenancePage() {
-  const [farms, setFarms] = useState<Farm[]>([]);
+  const {
+    farms,
+    selectedFarmId,
+    currentFarm: selectedFarm,
+    loadingFarms,
+    farmsError,
+    selectFarm,
+  } = useSelectedFarm();
+
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [logs, setLogs] = useState<MaintenanceLog[]>([]);
 
-  const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<
     number | null
   >(null);
@@ -73,7 +76,6 @@ export default function MaintenancePage() {
   const [notes, setNotes] = useState("");
 
   const [editingLogId, setEditingLogId] = useState<number | null>(null);
-  const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingEquipment, setLoadingEquipment] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -171,43 +173,6 @@ export default function MaintenancePage() {
   }
 
   useEffect(() => {
-    async function loadFarms() {
-      try {
-        const response = await fetch(`${API_URL}/api/v1/farms`);
-
-        if (!response.ok) {
-          throw new Error(`Farm request failed with status ${response.status}`);
-        }
-
-        const data: Farm[] = await response.json();
-        setFarms(data);
-
-        const savedFarmId = window.localStorage.getItem("selectedFarmId");
-        const parsedFarmId = savedFarmId ? Number(savedFarmId) : null;
-
-        if (
-          parsedFarmId !== null &&
-          data.some((farm) => farm.id === parsedFarmId)
-        ) {
-          setSelectedFarmId(parsedFarmId);
-        } else if (data.length > 0) {
-          setSelectedFarmId(data[0].id);
-        }
-      } catch (requestError) {
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load farms.",
-        );
-      } finally {
-        setLoadingFarms(false);
-      }
-    }
-
-    loadFarms();
-  }, []);
-
-  useEffect(() => {
     if (selectedFarmId === null) {
       setEquipment([]);
       setSelectedEquipmentId(null);
@@ -215,7 +180,6 @@ export default function MaintenancePage() {
       return;
     }
 
-    window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
     closeForm();
     setLogs([]);
     loadEquipment(selectedFarmId);
@@ -232,7 +196,7 @@ export default function MaintenancePage() {
   }, [selectedEquipmentId]);
 
   function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setSelectedFarmId(Number(event.target.value));
+    selectFarm(Number(event.target.value));
   }
 
   function handleEquipmentChange(
@@ -399,9 +363,6 @@ export default function MaintenancePage() {
     }
   }
 
-  const selectedFarm =
-    farms.find((farm) => farm.id === selectedFarmId) ?? null;
-
   const selectedEquipment =
     equipment.find((item) => item.id === selectedEquipmentId) ?? null;
 
@@ -461,12 +422,12 @@ export default function MaintenancePage() {
           </button>
         </div>
 
-        {error ? (
+        {farmsError || error ? (
           <div
             className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
             role="alert"
           >
-            {error}
+            {farmsError ?? error}
           </div>
         ) : null}
 
