@@ -2,12 +2,8 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSelectedFarm } from "../../hooks/use-selected-farm";
 
-type Farm = {
-  id: number;
-  name: string;
-  location: string | null;
-};
 
 type InventoryItem = {
   id: number;
@@ -45,9 +41,16 @@ function quantityLabel(item: InventoryItem) {
 }
 
 export default function InventoryPage() {
-  const [farms, setFarms] = useState<Farm[]>([]);
+  const {
+    farms,
+    selectedFarmId,
+    currentFarm: selectedFarm,
+    loadingFarms,
+    farmsError,
+    selectFarm,
+  } = useSelectedFarm();
+
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Seeds");
@@ -60,7 +63,6 @@ export default function InventoryPage() {
 
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [lowStockOnly, setLowStockOnly] = useState(false);
-  const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<number | null>(null);
@@ -112,42 +114,6 @@ export default function InventoryPage() {
     }
   }
 
-  useEffect(() => {
-    async function loadFarms() {
-      try {
-        const response = await fetch(`${API_URL}/api/v1/farms`);
-
-        if (!response.ok) {
-          throw new Error(`Farm request failed with status ${response.status}`);
-        }
-
-        const data: Farm[] = await response.json();
-        setFarms(data);
-
-        const savedFarmId = window.localStorage.getItem("selectedFarmId");
-        const parsedFarmId = savedFarmId ? Number(savedFarmId) : null;
-
-        if (
-          parsedFarmId !== null &&
-          data.some((farm) => farm.id === parsedFarmId)
-        ) {
-          setSelectedFarmId(parsedFarmId);
-        } else if (data.length > 0) {
-          setSelectedFarmId(data[0].id);
-        }
-      } catch (requestError) {
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load farms.",
-        );
-      } finally {
-        setLoadingFarms(false);
-      }
-    }
-
-    loadFarms();
-  }, []);
 
   useEffect(() => {
     if (selectedFarmId === null) {
@@ -155,15 +121,13 @@ export default function InventoryPage() {
       return;
     }
 
-    window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
     closeForm();
     loadItems(selectedFarmId);
   }, [selectedFarmId]);
 
   function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setSelectedFarmId(Number(event.target.value));
-  }
-
+  selectFarm(Number(event.target.value));
+}
   function openCreateForm() {
     resetForm();
     setError(null);
@@ -326,9 +290,6 @@ export default function InventoryPage() {
     }
   }
 
-  const selectedFarm =
-    farms.find((farm) => farm.id === selectedFarmId) ?? null;
-
   const lowStockItems = items.filter((item) => item.is_low_stock);
 
   const visibleItems = useMemo(
@@ -392,14 +353,14 @@ export default function InventoryPage() {
           </button>
         </div>
 
-        {error ? (
-          <div
-            className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-            role="alert"
-          >
-            {error}
-          </div>
-        ) : null}
+        {farmsError || error ? (
+  <div
+    className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+    role="alert"
+  >
+    {farmsError ?? error}
+  </div>
+) : null}
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto]">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
