@@ -3,11 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type Farm = {
-  id: number;
-  name: string;
-  location: string | null;
-};
+import { useSelectedFarm } from "../hooks/use-selected-farm";
 
 type UpcomingTask = {
   id: number;
@@ -18,7 +14,6 @@ type UpcomingTask = {
 };
 
 type DashboardData = {
-  farm: Farm;
   summary: {
     total_fields: number;
     active_crops: number;
@@ -63,63 +58,28 @@ function priorityClass(priority: string) {
 }
 
 export default function Home() {
-  const [farms, setFarms] = useState<Farm[]>([]);
-  const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
+  const {
+    farms,
+    selectedFarmId,
+    currentFarm,
+    loadingFarms,
+    farmsError,
+    selectFarm,
+  } = useSelectedFarm();
+
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadingFarms, setLoadingFarms] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
 
   useEffect(() => {
-    async function loadFarms() {
-      try {
-        const response = await fetch(`${API_URL}/api/v1/farms`);
-
-        if (!response.ok) {
-          throw new Error(
-            `Farm request failed with status ${response.status}`,
-          );
-        }
-
-        const data: Farm[] = await response.json();
-        setFarms(data);
-
-        const savedFarmId = window.localStorage.getItem("selectedFarmId");
-        const parsedFarmId = savedFarmId ? Number(savedFarmId) : null;
-        const savedFarmExists = data.some(
-          (farm) => farm.id === parsedFarmId,
-        );
-
-        if (savedFarmExists && parsedFarmId !== null) {
-          setSelectedFarmId(parsedFarmId);
-        } else if (data.length > 0) {
-          setSelectedFarmId(data[0].id);
-        }
-      } catch (requestError) {
-        const message =
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load farms.";
-
-        setError(message);
-      } finally {
-        setLoadingFarms(false);
-      }
-    }
-
-    loadFarms();
-  }, []);
-
-  useEffect(() => {
     if (selectedFarmId === null) {
+      setDashboard(null);
       return;
     }
 
-    window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
-
     async function loadDashboard() {
       setLoadingDashboard(true);
-      setError(null);
+      setDashboardError(null);
 
       try {
         const response = await fetch(
@@ -140,17 +100,18 @@ export default function Home() {
             ? requestError.message
             : "Unable to load dashboard data.";
 
-        setError(message);
+        setDashboardError(message);
+        setDashboard(null);
       } finally {
         setLoadingDashboard(false);
       }
     }
 
-    loadDashboard();
+    void loadDashboard();
   }, [selectedFarmId]);
 
   function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setSelectedFarmId(Number(event.target.value));
+    selectFarm(Number(event.target.value));
   }
 
   if (loadingFarms) {
@@ -163,7 +124,7 @@ export default function Home() {
     );
   }
 
-  if (error && !dashboard) {
+  if (farmsError) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
         <section className="max-w-lg rounded-2xl border border-red-200 bg-white p-8 shadow-sm">
@@ -173,7 +134,7 @@ export default function Home() {
           <h1 className="mt-2 text-2xl font-bold text-slate-900">
             We could not load your farm data.
           </h1>
-          <p className="mt-3 text-slate-600">{error}</p>
+          <p className="mt-3 text-slate-600">{farmsError}</p>
           <p className="mt-4 text-sm text-slate-500">
             Confirm that FastAPI is running at{" "}
             <code className="rounded bg-slate-100 px-1.5 py-0.5">
@@ -211,8 +172,6 @@ export default function Home() {
     );
   }
 
-  const currentFarm =
-    farms.find((farm) => farm.id === selectedFarmId) ?? dashboard?.farm;
   const summary = dashboard?.summary;
   const upcomingTasks = dashboard?.upcoming_tasks ?? [];
 
@@ -341,13 +300,13 @@ export default function Home() {
           </Link>
         </nav>
 
-        {error ? (
+        {dashboardError ? (
           <div
             className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
             role="alert"
           >
             The farm list loaded, but this dashboard could not refresh:{" "}
-            {error}
+            {dashboardError}
           </div>
         ) : null}
 

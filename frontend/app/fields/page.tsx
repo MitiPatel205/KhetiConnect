@@ -3,11 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-type Farm = {
-  id: number;
-  name: string;
-  location: string | null;
-};
+import { useSelectedFarm } from "../../hooks/use-selected-farm";
+
 
 type Field = {
   id: number;
@@ -51,8 +48,15 @@ function statusClass(status: string | null | undefined) {
 }
 
 export default function FieldsPage() {
-  const [farms, setFarms] = useState<Farm[]>([]);
-  const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
+  const {
+    farms,
+    selectedFarmId,
+    currentFarm: selectedFarm,
+    loadingFarms,
+    farmsError,
+    selectFarm,
+  } = useSelectedFarm();
+
   const [fields, setFields] = useState<Field[]>([]);
 
   const [name, setName] = useState("");
@@ -62,7 +66,6 @@ export default function FieldsPage() {
   const [notes, setNotes] = useState("");
 
   const [editingFieldId, setEditingFieldId] = useState<number | null>(null);
-  const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingFields, setLoadingFields] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingFieldId, setDeletingFieldId] = useState<number | null>(null);
@@ -109,42 +112,7 @@ export default function FieldsPage() {
     }
   }
 
-  useEffect(() => {
-    async function loadFarms() {
-      try {
-        const response = await fetch(`${API_URL}/api/v1/farms`);
-
-        if (!response.ok) {
-          throw new Error(`Farm request failed with status ${response.status}`);
-        }
-
-        const data: Farm[] = await response.json();
-        setFarms(data);
-
-        const savedFarmId = window.localStorage.getItem("selectedFarmId");
-        const parsedFarmId = savedFarmId ? Number(savedFarmId) : null;
-
-        if (
-          parsedFarmId !== null &&
-          data.some((farm) => farm.id === parsedFarmId)
-        ) {
-          setSelectedFarmId(parsedFarmId);
-        } else if (data.length > 0) {
-          setSelectedFarmId(data[0].id);
-        }
-      } catch (requestError) {
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load farms.",
-        );
-      } finally {
-        setLoadingFarms(false);
-      }
-    }
-
-    loadFarms();
-  }, []);
+  
 
   useEffect(() => {
     if (selectedFarmId === null) {
@@ -152,13 +120,13 @@ export default function FieldsPage() {
       return;
     }
 
-    window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
+    
     closeForm();
     loadFields(selectedFarmId);
   }, [selectedFarmId]);
 
-  function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setSelectedFarmId(Number(event.target.value));
+    function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    selectFarm(Number(event.target.value));
   }
 
   function openCreateForm() {
@@ -315,8 +283,6 @@ export default function FieldsPage() {
     }
   }
 
-  const selectedFarm =
-    farms.find((farm) => farm.id === selectedFarmId) ?? null;
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -374,14 +340,7 @@ export default function FieldsPage() {
           </button>
         </div>
 
-        {error ? (
-          <div
-            className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-            role="alert"
-          >
-            {error}
-          </div>
-        ) : null}
+        open -e app/fields/page.tsx
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <label className="block text-sm font-semibold text-slate-700">
