@@ -47,8 +47,12 @@ function formatDate(dateValue: string) {
 function priorityClass(priority: string) {
   const normalized = priority.toLowerCase();
 
-  if (normalized === "high" || normalized === "urgent") {
-    return "bg-red-100 text-red-700 ring-red-200";
+  if (normalized === "urgent") {
+    return "bg-rose-100 text-rose-700 ring-rose-200";
+  }
+
+  if (normalized === "high") {
+    return "bg-orange-100 text-orange-700 ring-orange-200";
   }
 
   if (normalized === "medium") {
@@ -72,7 +76,9 @@ export default function Home() {
         const response = await fetch(`${API_URL}/api/v1/farms`);
 
         if (!response.ok) {
-          throw new Error(`Farm request failed with status ${response.status}`);
+          throw new Error(
+            `Farm request failed with status ${response.status}`,
+          );
         }
 
         const data: Farm[] = await response.json();
@@ -80,8 +86,9 @@ export default function Home() {
 
         const savedFarmId = window.localStorage.getItem("selectedFarmId");
         const parsedFarmId = savedFarmId ? Number(savedFarmId) : null;
-
-        const savedFarmExists = data.some((farm) => farm.id === parsedFarmId);
+        const savedFarmExists = data.some(
+          (farm) => farm.id === parsedFarmId,
+        );
 
         if (savedFarmExists && parsedFarmId !== null) {
           setSelectedFarmId(parsedFarmId);
@@ -148,15 +155,17 @@ export default function Home() {
 
   if (loadingFarms) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6 text-slate-700">
-        Loading your farms…
+      <main className="flex min-h-screen items-center justify-center p-6">
+        <p className="text-sm font-medium text-slate-600">
+          Loading your farms…
+        </p>
       </main>
     );
   }
 
   if (error && !dashboard) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+      <main className="flex min-h-screen items-center justify-center p-6">
         <section className="max-w-lg rounded-2xl border border-red-200 bg-white p-8 shadow-sm">
           <p className="text-sm font-semibold text-red-700">
             KhetiConnect unavailable
@@ -179,24 +188,24 @@ export default function Home() {
 
   if (farms.length === 0 || selectedFarmId === null) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+      <main className="flex min-h-screen items-center justify-center p-6">
         <section className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <div className="text-4xl">🌱</div>
+          <div aria-hidden="true" className="text-4xl">
+            🌱
+          </div>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">
             Start with your first farm
           </h1>
           <p className="mt-3 text-slate-600">
-            No farms are available yet. Add a farm through the API while we
-            build the in-app creation form.
+            No farms are available yet. Create a farm to begin organizing your
+            fields, tasks, inventory, and equipment.
           </p>
-          <a
-            className="mt-6 inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800"
-            href="http://127.0.0.1:8000/docs"
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            className="mt-6 inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white outline-none transition hover:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+            href="/farms"
           >
-            Open API documentation
-          </a>
+            Manage farms
+          </Link>
         </section>
       </main>
     );
@@ -204,13 +213,12 @@ export default function Home() {
 
   const currentFarm =
     farms.find((farm) => farm.id === selectedFarmId) ?? dashboard?.farm;
-
   const summary = dashboard?.summary;
   const upcomingTasks = dashboard?.upcoming_tasks ?? [];
 
-   const cards = [
+  const cards = [
     {
-      label: "Total Fields",
+      label: "Total fields",
       value: summary?.total_fields ?? "—",
       note: "Fields managed",
       icon: "▦",
@@ -218,7 +226,7 @@ export default function Home() {
       href: "/fields",
     },
     {
-      label: "Active Crops",
+      label: "Active crops",
       value: summary?.active_crops ?? "—",
       note: "Currently growing",
       icon: "✿",
@@ -226,7 +234,7 @@ export default function Home() {
       href: "/crops",
     },
     {
-      label: "Open Tasks",
+      label: "Open tasks",
       value: summary?.open_tasks ?? "—",
       note: `${summary?.overdue_tasks ?? 0} overdue`,
       icon: "✓",
@@ -234,15 +242,15 @@ export default function Home() {
       href: "/tasks",
     },
     {
-      label: "Active Workers",
+      label: "Active workers",
       value: summary?.active_workers ?? "—",
       note: "Available team members",
-      icon: "👩‍🌾",
+      icon: "♙",
       color: "bg-indigo-50 text-indigo-700",
       href: "/workers",
     },
     {
-      label: "Unassigned Tasks",
+      label: "Unassigned tasks",
       value: summary?.unassigned_open_tasks ?? "—",
       note: "Open work without an owner",
       icon: "⚠",
@@ -250,7 +258,7 @@ export default function Home() {
       href: "/tasks",
     },
     {
-      label: "Low Stock",
+      label: "Low stock",
       value: summary?.low_stock_items ?? "—",
       note: "Items need attention",
       icon: "▣",
@@ -260,31 +268,34 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-emerald-950/10 bg-emerald-950 text-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-lime-400 text-xl text-emerald-950">
-              🌱
-            </div>
-            <div>
-              <p className="text-xl font-bold tracking-tight">KhetiConnect</p>
-              <p className="text-xs text-emerald-100">
-                Farm management, connected
-              </p>
-            </div>
+    <main className="min-h-screen">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+          <div>
+            <p className="text-sm font-semibold text-emerald-700">
+              Farm overview
+            </p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+              Welcome back to {currentFarm?.name}
+            </h1>
+            <p className="mt-2 text-sm text-slate-600 sm:text-base">
+              {currentFarm?.location ?? "Location not set"} · Review today’s
+              work and the health of your farm operation.
+            </p>
           </div>
 
-          <label className="flex items-center gap-3 text-sm">
-            <span className="font-medium text-emerald-100">Current farm</span>
+          <label className="flex w-full items-center gap-3 text-sm sm:w-auto">
+            <span className="shrink-0 font-semibold text-slate-700">
+              Current farm
+            </span>
             <select
               aria-label="Select farm"
-              className="rounded-lg border border-white/20 bg-emerald-900 px-3 py-2 font-medium text-white outline-none transition focus:border-lime-300"
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 sm:w-56"
               onChange={handleFarmChange}
               value={selectedFarmId}
             >
               {farms.map((farm) => (
-                <option className="bg-white text-slate-900" key={farm.id} value={farm.id}>
+                <option key={farm.id} value={farm.id}>
                   {farm.name}
                 </option>
               ))}
@@ -293,224 +304,181 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-8 px-6 py-8 lg:grid-cols-[220px_1fr]">
-        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="px-3 pb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Workspace
-          </p>
+      <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
+        <nav
+          aria-label="Mobile navigation"
+          className="mb-6 flex gap-2 overflow-x-auto pb-1 lg:hidden"
+        >
+          <Link
+            className="shrink-0 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white"
+            href="/"
+          >
+            Dashboard
+          </Link>
+          <Link
+            className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
+            href="/tasks"
+          >
+            Tasks
+          </Link>
+          <Link
+            className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
+            href="/inventory"
+          >
+            Inventory
+          </Link>
+          <Link
+            className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
+            href="/equipment"
+          >
+            Equipment
+          </Link>
+          <Link
+            className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700"
+            href="/workers"
+          >
+            Workers
+          </Link>
+        </nav>
 
-          <nav className="space-y-1 text-sm">
-            <Link
-  className="flex items-center gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 font-semibold text-emerald-800"
-  href="/"
->
-  <span>⌂</span>
-  Dashboard
-</Link>
-            <Link
-  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
-  href="/farms"
->
-  <span>⌘</span>
-  Farms
-</Link>
-            <Link
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
-              href="/fields"
-            >
-              <span>▦</span>
-              Fields
-            </Link>
-            <Link
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
-              href="/crops"
-            >
-              <span>✿</span>
-              Crops
-            </Link>
-            <Link
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
-              href="/tasks"
-            >
-              <span>✓</span>
-              Tasks
-            </Link>
-            <Link
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
-              href="/inventory"
-            >
-              <span>▣</span>
-              Inventory
-            </Link>
-            <Link
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
-              href="/equipment"
-            >
-              <span>⚙</span>
-              Equipment
-            </Link>
-            <Link
-  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-slate-600 transition hover:bg-slate-50"
-  href="/workers"
->
-  <span>♙</span>
-  Workers
-</Link>
-          </nav>
-        </aside>
-
-        <section>
-          <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-            <div>
-              <p className="text-sm font-semibold text-emerald-700">
-                Farm overview
-              </p>
-              <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">
-                Welcome back to {currentFarm?.name}
-              </h1>
-              <p className="mt-2 text-slate-600">
-                {currentFarm?.location ?? "Location not set"} · Review today’s
-                work and the health of your farm operation.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              <span className="font-semibold">
-                {summary?.completed_tasks ?? "—"}
-              </span>{" "}
-              completed tasks
-            </div>
+        {error ? (
+          <div
+            className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+            role="alert"
+          >
+            The farm list loaded, but this dashboard could not refresh:{" "}
+            {error}
           </div>
+        ) : null}
 
-          {error ? (
-            <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              The farm list loaded, but this dashboard could not refresh:{" "}
-              {error}
-            </div>
-          ) : null}
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section aria-label="Farm summary">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {cards.map((card) => (
               <Link
-  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
-  href={card.href}
-  key={card.label}
->
-                <div className="flex items-start justify-between">
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm outline-none transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+                href={card.href}
+                key={card.label}
+              >
+                <div className="flex items-start justify-between gap-4">
                   <p className="text-sm font-medium text-slate-500">
                     {card.label}
                   </p>
                   <span
-                    className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg ${card.color}`}
+                    aria-hidden="true"
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg ${card.color}`}
                   >
                     {card.icon}
                   </span>
                 </div>
-                <p className="mt-5 text-3xl font-bold tracking-tight">
+                <p className="mt-5 text-3xl font-bold tracking-tight text-slate-950">
                   {loadingDashboard ? "…" : card.value}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">{card.note}</p>
-            </Link>
+              </Link>
             ))}
           </div>
+        </section>
 
-          <div className="mt-8 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-            <section
-              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-              id="tasks"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <Link
-  className="text-lg font-bold transition hover:text-emerald-700"
-  href="/tasks"
->
-  Upcoming tasks
-</Link>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Keep your farm work on schedule.
-                  </p>
+        <section className="mt-8 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Link
+                  className="text-lg font-bold text-slate-900 outline-none transition hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-600"
+                  href="/tasks"
+                >
+                  Upcoming tasks
+                </Link>
+                <p className="mt-1 text-sm text-slate-500">
+                  Keep your farm work on schedule.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                {summary?.open_tasks ?? 0} open
+              </span>
+            </div>
+
+            <div className="mt-5 divide-y divide-slate-100">
+              {loadingDashboard ? (
+                <div className="py-8 text-center text-sm text-slate-500">
+                  Loading tasks…
                 </div>
-                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                  {summary?.open_tasks ?? 0} open
-                </span>
-              </div>
-
-              <div className="mt-5 divide-y divide-slate-100">
-                {loadingDashboard ? (
-                  <div className="py-8 text-center text-sm text-slate-500">
-                    Loading tasks…
-                  </div>
-                ) : upcomingTasks.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-slate-500">
-                    No upcoming tasks. Your schedule is clear.
-                  </div>
-                ) : (
-                  upcomingTasks.map((task) => (
-                    <article
-                      className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
-                      key={task.id}
+              ) : upcomingTasks.length === 0 ? (
+                <div className="py-8 text-center text-sm text-slate-500">
+                  No upcoming tasks. Your schedule is clear.
+                </div>
+              ) : (
+                upcomingTasks.map((task) => (
+                  <article
+                    className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    key={task.id}
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-800">
+                        {task.title}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Due {formatDate(task.due_date)} · {task.status}
+                      </p>
+                    </div>
+                    <span
+                      className={`w-fit rounded-full px-3 py-1 text-xs font-bold ring-1 ${priorityClass(task.priority)}`}
                     >
-                      <div>
-                        <p className="font-semibold text-slate-800">
-                          {task.title}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          Due {formatDate(task.due_date)} · {task.status}
-                        </p>
-                      </div>
-                      <span
-                        className={`w-fit rounded-full px-3 py-1 text-xs font-bold ring-1 ${priorityClass(task.priority)}`}
-                      >
-                        {task.priority}
-                      </span>
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-2xl bg-emerald-950 p-6 text-white shadow-sm">
-              <p className="text-sm font-semibold text-lime-300">
-                Attention needed
-              </p>
-              <h2 className="mt-2 text-2xl font-bold">
-                Keep the operation moving.
-              </h2>
-
-              <div className="mt-6 space-y-3">
-  <Link
-    className="block rounded-xl bg-white/10 p-4 transition hover:bg-white/20"
-    href="/inventory"
-  >
-    <p className="text-sm text-emerald-100">Low stock items</p>
-    <p className="mt-1 text-2xl font-bold">
-      {loadingDashboard ? "…" : summary?.low_stock_items ?? 0}
-    </p>
-  </Link>
-
-  <Link
-    className="block rounded-xl bg-white/10 p-4 transition hover:bg-white/20"
-    href="/equipment"
-  >
-    <p className="text-sm text-emerald-100">Maintenance due</p>
-    <p className="mt-1 text-2xl font-bold">
-      {loadingDashboard ? "…" : summary?.maintenance_due ?? 0}
-    </p>
-  </Link>
-
-  <Link
-    className="block rounded-xl bg-white/10 p-4 transition hover:bg-white/20"
-    href="/tasks"
-  >
-    <p className="text-sm text-emerald-100">Overdue tasks</p>
-    <p className="mt-1 text-2xl font-bold">
-      {loadingDashboard ? "…" : summary?.overdue_tasks ?? 0}
-    </p>
-  </Link>
-</div>
-            </section>
+                      {task.priority}
+                    </span>
+                  </article>
+                ))
+              )}
+            </div>
           </div>
+
+          <aside className="rounded-2xl bg-emerald-950 p-6 text-white shadow-sm">
+            <p className="text-sm font-semibold text-lime-300">
+              Attention needed
+            </p>
+            <h2 className="mt-2 text-2xl font-bold">
+              Keep the operation moving.
+            </h2>
+
+            <div className="mt-6 space-y-3">
+              <Link
+                className="block rounded-xl bg-white/10 p-4 outline-none transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-lime-300"
+                href="/inventory"
+              >
+                <p className="text-sm text-emerald-100">Low stock items</p>
+                <p className="mt-1 text-2xl font-bold">
+                  {loadingDashboard ? "…" : summary?.low_stock_items ?? 0}
+                </p>
+              </Link>
+
+              <Link
+                className="block rounded-xl bg-white/10 p-4 outline-none transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-lime-300"
+                href="/equipment"
+              >
+                <p className="text-sm text-emerald-100">Maintenance due</p>
+                <p className="mt-1 text-2xl font-bold">
+                  {loadingDashboard ? "…" : summary?.maintenance_due ?? 0}
+                </p>
+              </Link>
+
+              <Link
+                className="block rounded-xl bg-white/10 p-4 outline-none transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-lime-300"
+                href="/tasks"
+              >
+                <p className="text-sm text-emerald-100">Overdue tasks</p>
+                <p className="mt-1 text-2xl font-bold">
+                  {loadingDashboard ? "…" : summary?.overdue_tasks ?? 0}
+                </p>
+              </Link>
+
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm text-emerald-100">Completed tasks</p>
+                <p className="mt-1 text-2xl font-bold">
+                  {loadingDashboard ? "…" : summary?.completed_tasks ?? 0}
+                </p>
+              </div>
+            </div>
+          </aside>
         </section>
       </div>
     </main>
