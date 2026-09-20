@@ -2,12 +2,8 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSelectedFarm } from "../../hooks/use-selected-farm";
 
-type Farm = {
-  id: number;
-  name: string;
-  location: string | null;
-};
 
 type Worker = {
   id: number;
@@ -39,9 +35,16 @@ function formatDate(value: string | null) {
 }
 
 export default function WorkersPage() {
-  const [farms, setFarms] = useState<Farm[]>([]);
+  const {
+    farms,
+    selectedFarmId,
+    currentFarm: selectedFarm,
+    loadingFarms,
+    farmsError,
+    selectFarm,
+  } = useSelectedFarm();
+
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
 
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
@@ -53,7 +56,6 @@ export default function WorkersPage() {
 
   const [editingWorkerId, setEditingWorkerId] = useState<number | null>(null);
   const [activeOnly, setActiveOnly] = useState(false);
-  const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingWorkers, setLoadingWorkers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingWorkerId, setDeletingWorkerId] = useState<number | null>(
@@ -107,56 +109,18 @@ export default function WorkersPage() {
   }
 
   useEffect(() => {
-    async function loadFarms() {
-      try {
-        const response = await fetch(`${API_URL}/api/v1/farms`);
-
-        if (!response.ok) {
-          throw new Error(`Farm request failed with status ${response.status}`);
-        }
-
-        const data: Farm[] = await response.json();
-        setFarms(data);
-
-        const savedFarmId = window.localStorage.getItem("selectedFarmId");
-        const parsedFarmId = savedFarmId ? Number(savedFarmId) : null;
-
-        if (
-          parsedFarmId !== null &&
-          data.some((farm) => farm.id === parsedFarmId)
-        ) {
-          setSelectedFarmId(parsedFarmId);
-        } else if (data.length > 0) {
-          setSelectedFarmId(data[0].id);
-        }
-      } catch (requestError) {
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load farms.",
-        );
-      } finally {
-        setLoadingFarms(false);
-      }
-    }
-
-    loadFarms();
-  }, []);
-
-  useEffect(() => {
     if (selectedFarmId === null) {
       setWorkers([]);
       return;
     }
 
-    window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
     closeForm();
     loadWorkers(selectedFarmId);
   }, [selectedFarmId]);
 
   function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setSelectedFarmId(Number(event.target.value));
-  }
+  selectFarm(Number(event.target.value));
+}
 
   function openCreateForm() {
     resetForm();
@@ -306,9 +270,6 @@ export default function WorkersPage() {
     }
   }
 
-  const selectedFarm =
-    farms.find((farm) => farm.id === selectedFarmId) ?? null;
-
   const activeWorkerCount = workers.filter((worker) => worker.is_active).length;
 
   const visibleWorkers = useMemo(
@@ -371,14 +332,14 @@ export default function WorkersPage() {
           </button>
         </div>
 
-        {error ? (
-          <div
-            className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-            role="alert"
-          >
-            {error}
-          </div>
-        ) : null}
+        {farmsError || error ? (
+  <div
+    className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+    role="alert"
+  >
+    {farmsError ?? error}
+  </div>
+) : null}
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto]">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
