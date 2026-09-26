@@ -3,11 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-type Farm = {
-  id: number;
-  name: string;
-  location: string | null;
-};
+import { useSelectedFarm } from "../../hooks/use-selected-farm";
 
 type Field = {
   id: number;
@@ -98,12 +94,19 @@ function isOverdue(task: Task) {
 }
 
 export default function TasksPage() {
-  const [farms, setFarms] = useState<Farm[]>([]);
+  const {
+    farms,
+    selectedFarmId,
+    currentFarm: selectedFarm,
+    loadingFarms,
+    farmsError,
+    selectFarm,
+  } = useSelectedFarm();
+
   const [fields, setFields] = useState<Field[]>([]);
   const [crops, setCrops] = useState<Crop[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [selectedFarmId, setSelectedFarmId] = useState<number | null>(null);
 
   const [fieldId, setFieldId] = useState("");
   const [cropId, setCropId] = useState("");
@@ -119,7 +122,6 @@ export default function TasksPage() {
   const [priorityFilter, setPriorityFilter] = useState("All");
 
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
-  const [loadingFarms, setLoadingFarms] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
@@ -208,43 +210,6 @@ export default function TasksPage() {
   }
 
   useEffect(() => {
-    async function loadFarms() {
-      try {
-        const response = await fetch(`${API_URL}/api/v1/farms`);
-
-        if (!response.ok) {
-          throw new Error(`Farm request failed with status ${response.status}`);
-        }
-
-        const data: Farm[] = await response.json();
-        setFarms(data);
-
-        const savedFarmId = window.localStorage.getItem("selectedFarmId");
-        const parsedFarmId = savedFarmId ? Number(savedFarmId) : null;
-
-        if (
-          parsedFarmId !== null &&
-          data.some((farm) => farm.id === parsedFarmId)
-        ) {
-          setSelectedFarmId(parsedFarmId);
-        } else if (data.length > 0) {
-          setSelectedFarmId(data[0].id);
-        }
-      } catch (requestError) {
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load farms.",
-        );
-      } finally {
-        setLoadingFarms(false);
-      }
-    }
-
-    loadFarms();
-  }, []);
-
-  useEffect(() => {
     if (selectedFarmId === null) {
       setFields([]);
       setCrops([]);
@@ -253,13 +218,12 @@ export default function TasksPage() {
       return;
     }
 
-    window.localStorage.setItem("selectedFarmId", String(selectedFarmId));
     closeForm();
     loadFarmData(selectedFarmId);
   }, [selectedFarmId]);
 
   function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    setSelectedFarmId(Number(event.target.value));
+    selectFarm(Number(event.target.value));
   }
 
   function handleFieldChange(event: React.ChangeEvent<HTMLSelectElement>) {
@@ -459,9 +423,6 @@ export default function TasksPage() {
     }
   }
 
-  const selectedFarm =
-    farms.find((farm) => farm.id === selectedFarmId) ?? null;
-
   const availableCrops = fieldId
     ? crops.filter((crop) => crop.field_id === Number(fieldId))
     : crops;
@@ -562,12 +523,12 @@ export default function TasksPage() {
           </button>
         </div>
 
-        {error ? (
+        {farmsError || error ? (
           <div
             className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
             role="alert"
           >
-            {error}
+            {farmsError ?? error}
           </div>
         ) : null}
 
