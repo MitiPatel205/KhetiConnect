@@ -5,7 +5,6 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { useSelectedFarm } from "../../hooks/use-selected-farm";
 
-
 type Field = {
   id: number;
   farm_id: number;
@@ -58,7 +57,6 @@ export default function FieldsPage() {
   } = useSelectedFarm();
 
   const [fields, setFields] = useState<Field[]>([]);
-
   const [name, setName] = useState("");
   const [sizeAcres, setSizeAcres] = useState("");
   const [soilType, setSoilType] = useState("");
@@ -112,20 +110,17 @@ export default function FieldsPage() {
     }
   }
 
-  
-
   useEffect(() => {
     if (selectedFarmId === null) {
       setFields([]);
       return;
     }
 
-    
     closeForm();
-    loadFields(selectedFarmId);
+    void loadFields(selectedFarmId);
   }, [selectedFarmId]);
 
-    function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
+  function handleFarmChange(event: React.ChangeEvent<HTMLSelectElement>) {
     selectFarm(Number(event.target.value));
   }
 
@@ -283,7 +278,6 @@ export default function FieldsPage() {
     }
   }
 
-
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-emerald-950/10 bg-emerald-950 text-white">
@@ -340,7 +334,14 @@ export default function FieldsPage() {
           </button>
         </div>
 
-        open -e app/fields/page.tsx
+        {farmsError || error ? (
+          <div
+            className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+            role="alert"
+          >
+            {farmsError ?? error}
+          </div>
+        ) : null}
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <label className="block text-sm font-semibold text-slate-700">
