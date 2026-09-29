@@ -14,7 +14,7 @@ class InventoryItem(Base):
     farm_id: Mapped[int] = mapped_column(
         ForeignKey("farms.id"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     name: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -23,7 +23,7 @@ class InventoryItem(Base):
     quantity: Mapped[float] = mapped_column(
         Float,
         default=0,
-        nullable=False
+        nullable=False,
     )
 
     unit: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -31,7 +31,7 @@ class InventoryItem(Base):
     reorder_level: Mapped[float] = mapped_column(
         Float,
         default=0,
-        nullable=False
+        nullable=False,
     )
 
     supplier: Mapped[str | None] = mapped_column(String(150), nullable=True)
@@ -41,14 +41,19 @@ class InventoryItem(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
-        nullable=False
+        nullable=False,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
-        nullable=False
+        nullable=False,
     )
 
     farm = relationship("Farm")
+
+    maintenance_usages = relationship(
+        "MaintenanceInventoryUsage",
+        back_populates="inventory_item",
+    )

@@ -14,14 +14,14 @@ class MaintenanceLog(Base):
     equipment_id: Mapped[int] = mapped_column(
         ForeignKey("equipment.id"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     service_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     description: Mapped[str] = mapped_column(
         String(500),
-        nullable=False
+        nullable=False,
     )
 
     cost: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -31,10 +31,16 @@ class MaintenanceLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
-        nullable=False
+        nullable=False,
     )
 
     equipment = relationship(
         "Equipment",
-        back_populates="maintenance_logs"
+        back_populates="maintenance_logs",
+    )
+
+    parts_used = relationship(
+        "MaintenanceInventoryUsage",
+        back_populates="maintenance_log",
+        cascade="all, delete-orphan",
     )

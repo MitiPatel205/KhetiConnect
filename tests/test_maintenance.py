@@ -232,3 +232,202 @@ def test_deleting_equipment_deletes_its_maintenance_logs(
 
     assert logs_response.status_code == 200
     assert logs_response.json() == []
+
+def create_inventory_item(
+    client: TestClient,
+    farm_id: int,
+    *,
+    name: str = "Engine Oil",
+    category: str = "Lubricants",
+    quantity: float = 10,
+    unit: str = "liters",
+    reorder_level: float = 2,
+) -> dict:
+    response = client.post(
+        "/api/v1/inventory",
+        json={
+            "farm_id": farm_id,
+            "name": name,
+            "category": category,
+            "quantity": quantity,
+            "unit": unit,
+            "reorder_level": reorder_level,
+        },
+    )
+
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_creating_maintenance_log_deducts_used_inventory(
+    client: TestClient,
+):
+    farm_id = create_farm(client)
+    equipment_id = create_equipment(client, farm_id)
+    engine_oil = create_inventory_item(
+        client,
+        farm_id,
+        quantity=10,
+        unit="liters",
+    )
+
+    response = client.post(
+        "/api/v1/maintenance-logs",
+        json={
+            "equipment_id": equipment_id,
+            "service_date": "2026-09-20",
+            "description": "Tractor oil change",
+            "parts_used": [
+                {
+                    "inventory_item_id": engine_oil["id"],
+                    "quantity_used": 4,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 201
+
+    log = response.json()
+
+    assert len(log["parts_used"]) == 1
+    assert log["parts_used"][0]["inventory_item_id"] == engine_oil["id"]
+    assert log["parts_used"][0]["inventory_item_name"] == "Engine Oil"
+    assert log["parts_used"][0]["unit"] == "liters"
+    assert log["parts_used"][0]["quantity_used"] == 4
+
+    item_response = client.get(f"/api/v1/inventory/{engine_oil['id']}")
+
+    assert item_response.status_code == 200
+    assert item_response.json()["quantity"] == 6
+
+
+def test_creating_maintenance_log_rejects_insufficient_stock_without_changes(
+    client: TestClient,
+):
+    farm_id = create_farm(client)
+    equipment_id = create_equipment(client, farm_id)
+    engine_oil = create_inventory_item(
+        client,
+        farm_id,
+        quantity=3,
+        unit="liters",
+    )
+
+    response = client.post(
+        "/api/v1/maintenance-logs",
+        json={
+            "equipment_id": equipment_id,
+            "service_date": "2026-09-20",
+            "description": "Tractor oil change",
+            "parts_used": [
+                {
+                    "inventory_item_id": engine_oil["id"],
+                    "quantity_used": 4,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+    assert "Insufficient stock" in response.json()["detail"]
+
+    item_response = client.get(f"/api/v1/inventory/{engine_oil['id']}")
+
+    assert item_response.status_code == 200
+    assert item_response.json()["quantity"] == 3
+
+    logs_response = client.get(
+        f"/api/v1/maintenance-logs?equipment_id={equipment_id}"
+    )
+
+    assert logs_response.status_code == 200
+    assert logs_response.json() == []
+
+
+def test_creating_maintenance_log_rejects_inventory_from_another_farm(
+    client: TestClient,
+):
+    equipment_farm_id = create_farm(client, "Green Valley Farm")
+    inventory_farm_id = create_farm(client, "Riverbend Farm")
+    equipment_id = create_equipment(client, equipment_farm_id)
+    engine_oil = create_inventory_item(
+        client,
+        inventory_farm_id,
+        quantity=10,
+    )
+
+    response = client.post(
+        "/api/v1/maintenance-logs",
+        json={
+            "equipment_id": equipment_id,
+            "service_date": "2026-09-20",
+            "description": "Tractor oil change",
+            "parts_used": [
+                {
+                    "inventory_item_id": engine_oil["id"],
+                    "quantity_used": 2,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+    assert "same farm" in response.json()["detail"]
+
+    item_response = client.get(f"/api/v1/inventory/{engine_oil['id']}")
+
+    assert item_response.status_code == 200
+    assert item_response.json()["quantity"] == 10
+
+
+def test_deleting_maintenance_log_restores_used_inventory(
+    client: TestClient,
+):
+    farm_id = create_farm(client)
+    equipment_id = create_equipment(client, farm_id)
+    oil_filter = create_inventory_item(
+        client,
+        farm_id,
+        name="Oil Filter",
+        category="Parts",
+        quantity=3,
+        unit="filters",
+    )
+
+    log_response = client.post(
+        "/api/v1/maintenance-logs",
+        json={
+            "equipment_id": equipment_id,
+            "service_date": "2026-09-20",
+            "description": "Replace oil filter",
+            "parts_used": [
+                {
+                    "inventory_item_id": oil_filter["id"],
+                    "quantity_used": 1,
+                }
+            ],
+        },
+    )
+
+    assert log_response.status_code == 201
+
+    deducted_item_response = client.get(
+        f"/api/v1/inventory/{oil_filter['id']}"
+    )
+
+    assert deducted_item_response.status_code == 200
+    assert deducted_item_response.json()["quantity"] == 2
+
+    delete_response = client.delete(
+        f"/api/v1/maintenance-logs/{log_response.json()['id']}"
+    )
+
+    assert delete_response.status_code == 204
+
+    restored_item_response = client.get(
+        f"/api/v1/inventory/{oil_filter['id']}"
+    )
+
+    assert restored_item_response.status_code == 200
+    assert restored_item_response.json()["quantity"] == 3
