@@ -31,12 +31,33 @@ type DashboardData = {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
-function formatDate(dateValue: string) {
+function formatDueDate(dateValue: string) {
+  const dueDate = new Date(`${dateValue}T00:00:00`);
+  const today = new Date();
+
+  dueDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  const dayDifference = Math.round(
+    (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (dayDifference === 0) {
+    return "Due today";
+  }
+
+  if (dayDifference === 1) {
+    return "Due tomorrow";
+  }
+
+  if (dayDifference === -1) {
+    return "Due yesterday";
+  }
+
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
-    year: "numeric",
-  }).format(new Date(`${dateValue}T00:00:00`));
+  }).format(dueDate);
 }
 
 function priorityClass(priority: string) {
@@ -55,6 +76,20 @@ function priorityClass(priority: string) {
   }
 
   return "bg-emerald-100 text-emerald-700 ring-emerald-200";
+}
+
+function statusClass(status: string) {
+  const normalized = status.toLowerCase();
+
+  if (normalized === "completed") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-100";
+  }
+
+  if (normalized === "in progress") {
+    return "bg-sky-50 text-sky-700 ring-sky-100";
+  }
+
+  return "bg-slate-100 text-slate-700 ring-slate-200";
 }
 
 export default function Home() {
@@ -174,8 +209,45 @@ export default function Home() {
 
   const summary = dashboard?.summary;
   const upcomingTasks = dashboard?.upcoming_tasks ?? [];
+  const overdueTasks = summary?.overdue_tasks ?? 0;
+  const unassignedTasks = summary?.unassigned_open_tasks ?? 0;
 
   const cards = [
+    {
+      label: "Open tasks",
+      value: summary?.open_tasks ?? "—",
+      note:
+        overdueTasks > 0
+          ? `${overdueTasks} overdue`
+          : "Work scheduled and assigned",
+      icon: "✓",
+      color: "bg-sky-50 text-sky-700",
+      href: "/tasks",
+    },
+    {
+      label: "Low stock",
+      value: summary?.low_stock_items ?? "—",
+      note: "Items below reorder level",
+      icon: "▣",
+      color: "bg-amber-50 text-amber-700",
+      href: "/inventory",
+    },
+    {
+      label: "Maintenance due",
+      value: summary?.maintenance_due ?? "—",
+      note: "Equipment requiring service",
+      icon: "⚙",
+      color: "bg-rose-50 text-rose-700",
+      href: "/equipment",
+    },
+    {
+      label: "Active workers",
+      value: summary?.active_workers ?? "—",
+      note: "Available team members",
+      icon: "♙",
+      color: "bg-indigo-50 text-indigo-700",
+      href: "/workers",
+    },
     {
       label: "Total fields",
       value: summary?.total_fields ?? "—",
@@ -192,74 +264,66 @@ export default function Home() {
       color: "bg-lime-50 text-lime-700",
       href: "/crops",
     },
-    {
-      label: "Open tasks",
-      value: summary?.open_tasks ?? "—",
-      note: `${summary?.overdue_tasks ?? 0} overdue`,
-      icon: "✓",
-      color: "bg-sky-50 text-sky-700",
-      href: "/tasks",
-    },
-    {
-      label: "Active workers",
-      value: summary?.active_workers ?? "—",
-      note: "Available team members",
-      icon: "♙",
-      color: "bg-indigo-50 text-indigo-700",
-      href: "/workers",
-    },
-    {
-      label: "Unassigned tasks",
-      value: summary?.unassigned_open_tasks ?? "—",
-      note: "Open work without an owner",
-      icon: "⚠",
-      color: "bg-orange-50 text-orange-700",
-      href: "/tasks",
-    },
-    {
-      label: "Low stock",
-      value: summary?.low_stock_items ?? "—",
-      note: "Items need attention",
-      icon: "▣",
-      color: "bg-amber-50 text-amber-700",
-      href: "/inventory",
-    },
   ];
 
   return (
     <main className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <div>
-            <p className="text-sm font-semibold text-emerald-700">
-              Farm overview
-            </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-              Welcome back to {currentFarm?.name}
-            </h1>
-            <p className="mt-2 text-sm text-slate-600 sm:text-base">
-              {currentFarm?.location ?? "Location not set"} · Review today’s
-              work and the health of your farm operation.
-            </p>
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-5 sm:px-8">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-emerald-700">
+                Farm overview
+              </p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                Welcome back to {currentFarm?.name}
+              </h1>
+              <p className="mt-2 text-sm text-slate-600 sm:text-base">
+                {currentFarm?.location ?? "Location not set"} · Stay on top of
+                farm operations, tasks, inventory alerts, and equipment
+                maintenance.
+              </p>
+            </div>
+
+            <label className="flex w-full items-center gap-3 text-sm xl:w-auto">
+              <span className="shrink-0 font-semibold text-slate-700">
+                Current farm
+              </span>
+              <select
+                aria-label="Select farm"
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 xl:w-56"
+                onChange={handleFarmChange}
+                value={selectedFarmId}
+              >
+                {farms.map((farm) => (
+                  <option key={farm.id} value={farm.id}>
+                    {farm.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
-          <label className="flex w-full items-center gap-3 text-sm sm:w-auto">
-            <span className="shrink-0 font-semibold text-slate-700">
-              Current farm
-            </span>
-            <select
-              aria-label="Select farm"
-              className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 font-medium text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 sm:w-56"
-              onChange={handleFarmChange}
-              value={selectedFarmId}
+          <div className="flex flex-wrap gap-2">
+            <Link
+              className="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-3.5 py-2.5 text-sm font-semibold text-white outline-none transition hover:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+              href="/tasks"
             >
-              {farms.map((farm) => (
-                <option key={farm.id} value={farm.id}>
-                  {farm.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              + Add task
+            </Link>
+            <Link
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 outline-none transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+              href="/inventory"
+            >
+              + Add inventory
+            </Link>
+            <Link
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 outline-none transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+              href="/maintenance"
+            >
+              + Log maintenance
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -353,7 +417,7 @@ export default function Home() {
                 </p>
               </div>
               <span className="shrink-0 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                {summary?.open_tasks ?? 0} open
+                {loadingDashboard ? "…" : summary?.open_tasks ?? 0} open
               </span>
             </div>
 
@@ -377,18 +441,33 @@ export default function Home() {
                         {task.title}
                       </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        Due {formatDate(task.due_date)} · {task.status}
+                        {formatDueDate(task.due_date)} · {task.status}
                       </p>
                     </div>
-                    <span
-                      className={`w-fit rounded-full px-3 py-1 text-xs font-bold ring-1 ${priorityClass(task.priority)}`}
-                    >
-                      {task.priority}
-                    </span>
+
+                    <div className="flex w-fit flex-wrap gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${statusClass(task.status)}`}
+                      >
+                        {task.status}
+                      </span>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${priorityClass(task.priority)}`}
+                      >
+                        {task.priority}
+                      </span>
+                    </div>
                   </article>
                 ))
               )}
             </div>
+
+            <Link
+              className="mt-5 inline-flex text-sm font-semibold text-emerald-700 outline-none transition hover:text-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-600"
+              href="/tasks"
+            >
+              View all tasks →
+            </Link>
           </div>
 
           <aside className="rounded-2xl bg-emerald-950 p-6 text-white shadow-sm">
@@ -404,9 +483,19 @@ export default function Home() {
                 className="block rounded-xl bg-white/10 p-4 outline-none transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-lime-300"
                 href="/inventory"
               >
-                <p className="text-sm text-emerald-100">Low stock items</p>
-                <p className="mt-1 text-2xl font-bold">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-emerald-50">
+                    Low stock items
+                  </p>
+                  <span className="text-xs font-semibold text-lime-300">
+                    View inventory →
+                  </span>
+                </div>
+                <p className="mt-2 text-2xl font-bold">
                   {loadingDashboard ? "…" : summary?.low_stock_items ?? 0}
+                </p>
+                <p className="mt-1 text-sm text-emerald-100">
+                  Items below their reorder level.
                 </p>
               </Link>
 
@@ -414,29 +503,68 @@ export default function Home() {
                 className="block rounded-xl bg-white/10 p-4 outline-none transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-lime-300"
                 href="/equipment"
               >
-                <p className="text-sm text-emerald-100">Maintenance due</p>
-                <p className="mt-1 text-2xl font-bold">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-emerald-50">
+                    Maintenance due
+                  </p>
+                  <span className="text-xs font-semibold text-lime-300">
+                    View equipment →
+                  </span>
+                </div>
+                <p className="mt-2 text-2xl font-bold">
                   {loadingDashboard ? "…" : summary?.maintenance_due ?? 0}
                 </p>
-              </Link>
-
-              <Link
-                className="block rounded-xl bg-white/10 p-4 outline-none transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-lime-300"
-                href="/tasks"
-              >
-                <p className="text-sm text-emerald-100">Overdue tasks</p>
-                <p className="mt-1 text-2xl font-bold">
-                  {loadingDashboard ? "…" : summary?.overdue_tasks ?? 0}
+                <p className="mt-1 text-sm text-emerald-100">
+                  Equipment items requiring service.
                 </p>
               </Link>
 
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                <p className="text-sm text-emerald-100">Completed tasks</p>
+                {overdueTasks > 0 ? (
+                  <>
+                    <p className="text-sm font-semibold text-amber-200">
+                      Overdue tasks
+                    </p>
+                    <p className="mt-2 text-2xl font-bold">
+                      {loadingDashboard ? "…" : overdueTasks}
+                    </p>
+                    <p className="mt-1 text-sm text-emerald-100">
+                      Review overdue work and update task owners.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-lime-300">
+                      ✓ No overdue tasks
+                    </p>
+                    <p className="mt-2 text-sm text-emerald-100">
+                      All scheduled work is on track.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm text-emerald-100">
+                  Completed tasks
+                </p>
                 <p className="mt-1 text-2xl font-bold">
                   {loadingDashboard ? "…" : summary?.completed_tasks ?? 0}
                 </p>
+                <p className="mt-1 text-sm text-emerald-100">
+                  {unassignedTasks > 0
+                    ? `${unassignedTasks} open task${unassignedTasks === 1 ? "" : "s"} still need an owner.`
+                    : "Every open task has an assigned owner."}
+                </p>
               </div>
             </div>
+
+            <Link
+              className="mt-5 inline-flex text-sm font-semibold text-lime-300 outline-none transition hover:text-lime-200 focus-visible:ring-2 focus-visible:ring-lime-300"
+              href="/tasks"
+            >
+              Review all tasks →
+            </Link>
           </aside>
         </section>
       </div>
