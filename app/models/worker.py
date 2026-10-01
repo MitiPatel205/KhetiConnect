@@ -48,5 +48,10 @@ class Worker(Base):
 
     tasks = relationship(
         "Task",
-        back_populates="worker"
+        back_populates="worker",
+    )
+
+    equipment_usage_logs = relationship(
+        "EquipmentUsageLog",
+        back_populates="worker",
     )

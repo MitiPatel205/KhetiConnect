@@ -42,7 +42,12 @@ class Field(Base):
     farm = relationship("Farm", back_populates="fields")
 
     crops = relationship(
-    "Crop",
-    back_populates="field",
-    cascade="all, delete-orphan"
-)
+        "Crop",
+        back_populates="field",
+        cascade="all, delete-orphan",
+    )
+
+    equipment_usage_logs = relationship(
+        "EquipmentUsageLog",
+        back_populates="field",
+    )

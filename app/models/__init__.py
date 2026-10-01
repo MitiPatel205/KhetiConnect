@@ -7,3 +7,4 @@ from app.models.equipment import Equipment
 from app.models.maintenance import MaintenanceLog
 from app.models.worker import Worker
 from app.models.maintenance_inventory_usage import MaintenanceInventoryUsage
+from app.models.equipment_usage import EquipmentUsageLog
