@@ -8,6 +8,7 @@ from app.routers import (
     crops,
     dashboard,
     equipment,
+    equipment_usage,
     farms,
     fields,
     inventory,
@@ -38,6 +39,7 @@ app.include_router(crops.router, prefix=API_V1_PREFIX)
 app.include_router(tasks.router, prefix=API_V1_PREFIX)
 app.include_router(inventory.router, prefix=API_V1_PREFIX)
 app.include_router(equipment.router, prefix=API_V1_PREFIX)
+app.include_router(equipment_usage.router, prefix=API_V1_PREFIX)
 app.include_router(maintenance.router, prefix=API_V1_PREFIX)
 app.include_router(dashboard.router, prefix=API_V1_PREFIX)
 app.include_router(workers.router, prefix=API_V1_PREFIX)

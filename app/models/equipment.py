@@ -61,5 +61,11 @@ class Equipment(Base):
     maintenance_logs = relationship(
         "MaintenanceLog",
         back_populates="equipment",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+    )
+
+    usage_logs = relationship(
+        "EquipmentUsageLog",
+        back_populates="equipment",
+        cascade="all, delete-orphan",
     )
